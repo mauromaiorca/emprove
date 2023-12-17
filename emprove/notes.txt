@@ -1,0 +1,15 @@
+Instructions from here: https://medium.com/analytics-vidhya/how-to-create-a-python-library-7d5aea80cc3f
+
+Create and activate a virtual environment
+
+
+Install useful tools 
+/usr/local/bin/python3.9 -m pip install wheel
+/usr/local/bin/python3.9 -m pip install setuptools
+/usr/local/bin/python3.9 -m pip install twine
+
+/usr/local/bin/python3.9 -m venv venv
+source venv/bin/activate
+/usr/local/bin/python3.9 setup.py bdist_wheel
+/usr/local/bin/python3.9 -m pip install ./dist/scorem-0.1.0-py3-none-any.whl
+/usr/local/bin/python3.9 -m pip install ./dist/scorem-0.1.0-py3-none-any.whl --force-reinstall
