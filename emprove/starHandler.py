@@ -499,6 +499,24 @@ def writeDataframeToStar_deNovo(dataframe, filenameOut: PathLike):
   fw.close()
 
 
+def extractWorst(filenameIn: PathLike, filenameOut: PathLike, numItems, tagToSelect):
+ #print ("selectWorst ",numItems)
+ header_list = header_columns(filenameIn)
+ startRawInfo=infoStarFile(filenameIn)[0]
+ df = pd.read_csv(filenameIn, skiprows=startRawInfo-1, names=header_list, skipinitialspace=True, sep="\s+")
+ 
+ #print("Data before sorting:")
+ #print(df.head())
+ 
+ df = df.sort_values([tagToSelect],ascending=False, kind='quicksort').head(numItems)
+
+ #print("Data after sorting:")
+ #print(df.head())  # Print the first few rows after sorting for inspection
+
+
+ df = df.sort_index()
+ writeDataframeToStar(filenameIn, filenameOut, df)
+
 #extract best/worst
 def extractBest(filenameIn: PathLike, filenameOut: PathLike, numItems, tagToSelect):
  #print ("selectBest ",numItems)
@@ -609,14 +627,6 @@ def plotStarFileParamValueInteractive(filenameIn: PathLike, columnName):
     plt.show()
 
 
-def extractWorst(filenameIn: PathLike, filenameOut: PathLike, numItems, tagToSelect):
- #print ("selectWorst ",numItems)
- header_list = header_columns(filenameIn)
- startRawInfo=infoStarFile(filenameIn)[0]
- df = pd.read_csv(filenameIn, skiprows=startRawInfo-1, names=header_list, skipinitialspace=True, sep="\s+")
- df = df.sort_values([tagToSelect],ascending=False, kind='quicksort').head(numItems)
- df = df.sort_index()
- writeDataframeToStar(filenameIn, filenameOut, df)
 
 def extractCategory(filenameIn: PathLike, filenameOut: PathLike, categoryName, categoryValue):
  #print ("extractCategory")

@@ -58,8 +58,14 @@ def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predi
         x_outlier = x[outlier_mask]
         y_outlier = y[outlier_mask]
 
+        # Check if we have enough unique data points
+        if len(x_fit) <= 1:
+            print("Insufficient unique data points for spline fitting.")
+            return None  # Or handle this scenario appropriately
+
         # Fit a spline with weights given to lower y-values
         k = min(4, len(x_fit) - 1)
+        k = max(1, min(4, len(x_fit) - 1))
         weights = 1 / y_fit
         s = UnivariateSpline(x_fit, y_fit, w=weights, k=k, s=len(x_fit))
         x_smooth = np.linspace(min(x_fit), max(x_fit), 1000)
@@ -316,6 +322,8 @@ def automaticParticleSubsets(args):
     	expectedEstimatedParticlesNumber=num_non_null_items
 
     result=automaticParticleSubsets2(args.locres, num_non_null_items, 10)
+    print ("result automaticParticleSubsets2=",result)
+    exit(0)
     predict_min_particles(args.locres, showPlot=False,predicted_particles=result, outputImageFile=args.plotOnFile)
     print("Particles for performing selection",result)
     if not args.save == "":

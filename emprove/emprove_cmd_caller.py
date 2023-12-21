@@ -112,28 +112,6 @@ def createAverageStack(particlesStarFile, outputStackBasename, numViews):
 
 
 
-emprove_AverageViews = command.add_parser (
-    "AverageViews", description="NOT WORKING YET. Create view average file", help='create view average file'
-)
-emprove_AverageViews.add_argument("--i", required=True, type=str, help="input star file to create average")
-emprove_AverageViews.add_argument("--o", required=True,  type=str, help="output basename stack")
-emprove_AverageViews.add_argument("--numViews", required=False, default=50,  type=int, help="number of views partitioned for normalization")
-def AverageViews(args):
-    #views=args.numViews
-    if (not os.path.isfile(args.i)):
-        print('ERROR: file \"',args.i,'\" not existing')
-    createAverageStack(args.i, args.o, args.numViews)
-#    coordinates = starHandler.readColumns(args.i, ['_rlnAnglePsi','_rlnOriginXAngst','_rlnOriginYAngst',args.tag])
-#    phiListParticle = coordinates['_rlnAngleRot'].tolist()
-#    thetaListParticle = coordinates['_rlnAngleTilt'].tolist()
-#    scores = coordinates[args.tag].tolist()
-#    randomSubset = coordinates['_rlnRandomSubset'].tolist()
-#    rankedParticles=emprove_core.EqualizedParticlesRank(phiListParticle,thetaListParticle,scores,randomSubset,int(views))
-#    starHandler.addColumns(args.i, args.o, [args.tagOut], [rankedParticles])
-#    viewsParticles=emprove_core.GetEulerClassGroup(phiListParticle,thetaListParticle,int(views))
-#    starHandler.addColumns(args.i, args.o, [tagOut_view], [viewsParticles])
-
-
 
 ##########################################
 ##########################################
@@ -191,17 +169,22 @@ emprove_scoreParticles = command.add_parser (
 )
 emprove_scoreParticles.add_argument("--i", required=True, type=str, help="input star file with particles to score")
 emprove_scoreParticles.add_argument("--mask", required=True, type=str, help="mrc volumetric file with mask")
-emprove_scoreParticles.add_argument("--map", required=True, type=str, help="mrc volumetric file with reference map")
+emprove_scoreParticles.add_argument("--map", required=True, type=str, help="mrc volumetric file with reference map (or first half reference map if map2 is given)")
+emprove_scoreParticles.add_argument("--map2", required=False, type=str, help="mrc volumetric file with second half map as reference")
 emprove_scoreParticles.add_argument("--apix", required=True, type=float, help="angpix")
 emprove_scoreParticles.add_argument("--sigma", required=False, type=float, default=1,  help="sigma blurring in pixels")
 emprove_scoreParticles.add_argument("--selectionName", required=False, type=str, default="0",  help="Name for the selection")
 emprove_scoreParticles.add_argument("--o", required=False, default=None,  type=str, help="output file with scores")
 emprove_scoreParticles.add_argument("--mpi", required=False, default=4,  type=int, help="number of mpi parallel processes")
+emprove_scoreParticles.add_argument("--rank", required=False, default="350", type=int, help="rank particles using a given number of Euler viewss")
+
 def scoreParticles(args):
     inputFile=args.i
     outputFile=args.o
     templateMask=args.mask
     templateMap=args.map
+    templateMap2=args.map2
+    rankViews=args.rank
     #tagPrefix=args.prefix
     if (not os.path.isfile(inputFile)):
         print('ERROR: file \"',inputFile,'\" not existing')
@@ -210,21 +193,54 @@ def scoreParticles(args):
         print('ERROR: mask file \"',templateMask,'\" not existing')
         exit()
     if (not os.path.isfile(templateMap)):
-        print('ERROR: mask file \"',templateMap,'\" not existing')
+        print('ERROR: map file \"',templateMap,'\" not existing')
         exit()
     if (outputFile==None):
         outputFile=inputFile
     tag='_emprove_SCI__'+"{:.2f}".format(args.sigma)+'_scored_selection_'+args.selectionName
     listScoresTags = [tag]
     print (listScoresTags)
-    assessParticles.ParticleVsReprojectionScores(inputFile,
-        outputFile,
-        templateMap,
-        templateMask,
-        angpix=args.apix,
-        numProcesses=args.mpi,
-        listScoresTags = listScoresTags,
-        doCTF=True)
+
+    if args.map2 is None:
+        assessParticles.ParticleVsReprojectionScores(inputFile,
+            outputFile,
+            templateMap,
+            templateMask,
+            angpix=args.apix,
+            numProcesses=args.mpi,
+            listScoresTags = listScoresTags,
+            doCTF=True)
+    else:
+        if (not os.path.isfile(templateMap2)):
+            print('ERROR: map file \"',templateMap2,'\" not existing')
+            exit()
+        assessParticles.ParticleVsReprojectionScores_HalfMaps(inputFile,
+            outputFile,
+            templateMap,
+            templateMap2,
+            templateMask,
+            angpix=args.apix,
+            numProcesses=args.mpi,
+            listScoresTags = listScoresTags,
+            doCTF=True)
+
+
+    #ranking
+    rankingTag=tag+"_norm"+str(rankViews)
+    coordinates = starHandler.readColumns(outputFile, ['_rlnAngleRot','_rlnAngleTilt','_rlnRandomSubset',tag])
+    phiListParticle = coordinates['_rlnAngleRot'].tolist()
+    thetaListParticle = coordinates['_rlnAngleTilt'].tolist()
+    scores = coordinates[tag].tolist()
+    randomSubset = coordinates['_rlnRandomSubset'].tolist()
+    rankedParticles=emprove_core.EqualizedParticlesRank(phiListParticle,thetaListParticle,scores,randomSubset,int(rankViews))
+    columns=starHandler.header_columns(outputFile)
+    if rankingTag in columns:
+            starHandler.removeColumnsTagsStartingWith(outputFile, outputFile, rankingTag)
+    starHandler.addColumns(outputFile, outputFile, [rankingTag], [rankedParticles])
+
+
+
+
 
 
 ##########################################
@@ -473,13 +489,24 @@ done
 
 
 
+def find_emprove_ranking_tag(elements):
+    """
+    Search for a column name in the dataframe that starts with '_emprove_' and ends with '_norm' followed by a number.
+    """
+    import re
+    for element in elements:
+        if re.match(r'_emprove_.*_norm\d+$', element):
+            return element
+    return None
+
+
 
 emprove_selectWorstRanked = command.add_parser (
     "selectWorstRanked", description="selectWorstRanked", help='select worst scoring particles'
 )
 emprove_selectWorstRanked.add_argument("--i", required=True, type=str, help="input file")
 emprove_selectWorstRanked.add_argument("--num", required=True, type=str, help="number of ranked particles to select")
-emprove_selectWorstRanked.add_argument("--tag", required=True, type=str, help="tag to select worst")
+emprove_selectWorstRanked.add_argument("--tag", required=False, type=str, help="tag to select worst")
 emprove_selectWorstRanked.add_argument("--o", required=False, default=None,  type=str, help="output file")
 def selectWorstRanked(args):
     inputFile=args.i
@@ -490,7 +517,15 @@ def selectWorstRanked(args):
     if (not os.path.isfile(inputFile)):
         print('ERROR: file \"',inputFile,'\" not existing')
         exit(0)
-    starHandler.extractWorst(inputFile, outputFile, int(args.num), tag)
+    columns=starHandler.header_columns(inputFile)
+    if not args.tag:
+        args.tag = args.tag if args.tag else find_emprove_ranking_tag(columns)
+    if args.tag not in columns:
+        print("target tag [", args.tag,"] not in ", inputFile)
+        exit(0)
+    print ("target tag=", args.tag)
+    starHandler.extractWorst(inputFile, outputFile, int(args.num), args.tag)
+
 
 
 emprove_selectBestRanked = command.add_parser (
@@ -498,18 +533,24 @@ emprove_selectBestRanked = command.add_parser (
 )
 emprove_selectBestRanked.add_argument("--i", required=True, type=str, help="input file")
 emprove_selectBestRanked.add_argument("--num", required=True, type=str, help="number of ranked particles to select")
-emprove_selectBestRanked.add_argument("--tag", required=True, type=str, help="tag to select best")
+emprove_selectBestRanked.add_argument("--tag", required=False, type=str, help="tag to select best")
 emprove_selectBestRanked.add_argument("--o", required=False, default=None,  type=str, help="output file")
 def selectBestRanked(args):
     inputFile=args.i
-    tag=str(args.tag)
     outputFile=args.o
     if (outputFile==None):
         outputFile=inputFile
     if (not os.path.isfile(inputFile)):
         print('ERROR: file \"',inputFile,'\" not existing')
         exit(0)
-    starHandler.extractBest(inputFile, outputFile, int(args.num), tag)
+    columns=starHandler.header_columns(inputFile)
+    if not args.tag:
+        args.tag = args.tag if args.tag else find_emprove_ranking_tag(columns)
+    if args.tag not in columns:
+        print("target tag [", args.tag,"] not in ", inputFile)
+        exit(0)
+    print ("target tag=", args.tag)
+    starHandler.extractBest(inputFile, outputFile, int(args.num), args.tag)
 
 
 #def removeStarDuplicates(filenameIn):
@@ -608,18 +649,16 @@ def plotParamValue(args):
 
 def main(command_line=None):
     args = emprove_parser.parse_args(command_line)
-    if args.command == "rankParticles":
-        rankParticles(args)
-    elif args.command == "scoreParticles":
+    if args.command == "scoreParticles":
         scoreParticles(args)
+    elif args.command == "rankParticles":
+        rankParticles(args)
     elif args.command == "scoreClassify":
         scoreClassify(args)
     elif args.command == "produce_reconstructions_script":
         produce_reconstructions_script(args)
     elif args.command == "analyse_reconstructions_outcome":
         analyse_reconstructions_outcome(args)
-    elif args.command == "AverageViews":
-        AverageViews(args)
     elif args.command == "selectWorstRanked":
         selectWorstRanked(args)
     elif args.command == "selectBestRanked":
