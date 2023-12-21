@@ -1250,5 +1250,12 @@ void writeMrcImage(const char * filenameMRC, T * I, const unsigned long int nx, 
 
 
 
+double calculateXPixelSpacing(const MRCHeader& header) {
+    double spacing;
+    // Calculate spacing for each axis
+    spacing = header.mx > 0 ? header.a / header.mx : 0;
+    return spacing;
+}
+
 
 #endif
