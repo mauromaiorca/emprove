@@ -24,7 +24,13 @@ it creates a directory with the given name ("J182_emprove" in the example), and 
 ## Create a session for classification, starting with initial lower resolution maps
 go in the directory where you want the reclassification to be created and call the following command:
 ```
-emprove_session_manager classification_session --name reclassification --particles particlesStack.star --mask mask.mrc --maps class1.mrc class2.mrc class3.mrc class4.mrc  --angpix 0.8400 --mpi 85
+emprove_session_manager classification_session  \
+            --name reclassification  \
+            --particles particlesStack.star \
+            --mask mask.mrc \
+            --maps class1.mrc class2.mrc class3.mrc class4.mrc \
+            --angpix 0.8400 \
+            --mpi 85
 reclassification/reclassification_run.sh
 ```
 
