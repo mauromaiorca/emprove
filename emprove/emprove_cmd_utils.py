@@ -6,9 +6,10 @@ import os.path
 import numpy as np
 import emprove_core
 from emprove import starHandler
-from emprove import projector_torch
-from os import PathLike
+from os import PathLike,makedirs
 from emprove import utils
+from numpy.fft import fftn, ifftn
+import pandas as pd
 
 emprove_parser = argparse.ArgumentParser(
     prog="emprove_utils",
@@ -643,392 +644,121 @@ def rotate_image(image2D, rotation_matrix, center):
 
 
 
-
-
-def FBP_reconstruction_cpp2(starFile, outputMRC):
-    # Presuming some missing parts of the code based on context
-    version=starHandler.infoStarFile(starFile)[2]
-    print("star file version=",version)
-    #print("sin(180)=",np.sin(math.radians(180)))
-    
-    if version=="relion_v31":
-        suffix_particles='particles'
-        particle_parameters = starHandler.read_star_columns_from_sections(starFile, suffix_particles,  ['_rlnImageName','_rlnAngleRot','_rlnAngleTilt',  '_rlnAnglePsi','_rlnOriginXAngst', '_rlnOriginYAngst'])
-    else:
-        suffix_particles=''
-        particle_parameters = starHandler.read_star_columns_from_sections(starFile, suffix_particles,  ['_rlnImageName','_rlnAngleRot','_rlnAngleTilt',  '_rlnAnglePsi','_rlnOriginX', '_rlnOriginY'])
-
-    image_name_first_row = str(particle_parameters['_rlnImageName'].iloc[0])
-    firstStackName = image_name_first_row[image_name_first_row.find('@')+1:]
-    sizeMap = emprove_core.sizeMRC(firstStackName)
-    nx, ny, nz = sizeMap[0], sizeMap[1], max(sizeMap[0], sizeMap[1])
-    mask2D=create_circle_mask((nx,ny), nx/2)
-
-
-    outmapComplex=np.zeros((nx, ny, nz), dtype=complex)
-    outmapCounter=np.zeros((nx, ny, nz))
-    for index, row in particle_parameters.iterrows():
-        tmpLine = row['_rlnImageName']
-        atPosition = tmpLine.find('@')
-        imageNo = int(tmpLine[:atPosition])
-        stackName = tmpLine[atPosition+1:]
-        phi = (float(row['_rlnAngleRot']))
-        theta = (float(row['_rlnAngleTilt']))
-        psi = (float(row['_rlnAnglePsi']))
-        print("phi=",phi,"  theta=",theta,"     psi=",psi)
-        if version=="relion_v31":
-            shiftX = float(row['_rlnOriginXAngst'])
-            shiftY = float(row['_rlnOriginYAngst'])
-        else:
-            shiftX = float(row['_rlnOriginX'])
-            shiftY = float(row['_rlnOriginY'])
-        p=emprove_core.ReadMrcSlice(stackName, imageNo-1)
-        image2D=np.reshape(p, (nx, ny))
-        insert_image(image2D, mask2D, outmapComplex, outmapCounter, phi, theta, psi)
-        #emprove_core.backprojectParticles(p, outmap ,nx, ny, nz,1,phi,theta,psi,shiftX,shiftY)
-
-
-    #normalize
-    outmapComplex[outmapCounter == 0] = 0
-    non_zero_indices = outmapCounter != 0
-    outmapComplex[non_zero_indices] /= outmapCounter[non_zero_indices]
-    outmap_inverse_fourier = np.real(ifftn(fftshift(outmapComplex)))
-
-    #outmap_inverse_fourier_temp = np.real(ifftn(fftshift(outmapComplex)))
-    #outmap_inverse_fourier = np.roll(outmap_inverse_fourier_temp, shift=(nx//2, ny//2, nz//2), axis=(0, 1, 2))
-
-    # Save the final reconstructed volume
-    emprove_core.WriteMRC(outmap_inverse_fourier.flatten().tolist(), outputMRC ,nx, ny, nz,1)
-
-
-
-def FBP_reconstruction_cpp(starFile, outputMRC):
-    from scipy.fft import fft2, ifftn, fftshift
-    from scipy.interpolate import RegularGridInterpolator
-    # Presuming some missing parts of the code based on context
-    version=starHandler.infoStarFile(starFile)[2]
-    print("star file version=",version)
-    #print("sin(180)=",np.sin(math.radians(180)))
-    
-    if version=="relion_v31":
-        suffix_particles='particles'
-        particle_parameters = starHandler.read_star_columns_from_sections(starFile, suffix_particles,  ['_rlnImageName','_rlnAngleRot','_rlnAngleTilt',  '_rlnAnglePsi','_rlnOriginXAngst', '_rlnOriginYAngst'])
-    else:
-        suffix_particles=''
-        particle_parameters = starHandler.read_star_columns_from_sections(starFile, suffix_particles,  ['_rlnImageName','_rlnAngleRot','_rlnAngleTilt',  '_rlnAnglePsi','_rlnOriginX', '_rlnOriginY'])
-
-    image_name_first_row = str(particle_parameters['_rlnImageName'].iloc[0])
-    firstStackName = image_name_first_row[image_name_first_row.find('@')+1:]
-    sizeMap = emprove_core.sizeMRC(firstStackName)
-    nx, ny, nz = sizeMap[0], sizeMap[1], max(sizeMap[0], sizeMap[1])
-    mask2D=create_circle_mask((nx,ny), nx/2)
-    fourier_3d = np.zeros((nz, ny, nx), dtype=complex)
-
-
-    outmapComplex=np.zeros((nx, ny, nz), dtype=complex)
-    outmapCounter=np.zeros((nx, ny, nz))
-    counter=0
-    for index, row in particle_parameters.iterrows():
-        counter+=1
-        tmpLine = row['_rlnImageName']
-        atPosition = tmpLine.find('@')
-        imageNo = int(tmpLine[:atPosition])
-        stackName = tmpLine[atPosition+1:]
-        phi0 = (float(row['_rlnAngleRot']))
-        theta0 = (float(row['_rlnAngleTilt']))
-        psi0 = (float(row['_rlnAnglePsi']))
-        print("phi=",phi0,"  theta=",theta0,"     psi=",psi0)
-        if version=="relion_v31":
-            shiftX = float(row['_rlnOriginXAngst'])
-            shiftY = float(row['_rlnOriginYAngst'])
-        else:
-            shiftX = float(row['_rlnOriginX'])
-            shiftY = float(row['_rlnOriginY'])
-        p=emprove_core.ReadMrcSlice(stackName, imageNo-1)
-        projection=np.reshape(p, (nx, ny))
-        #insert_image(image2D, mask2D, outmapComplex, outmapCounter, phi, theta, psi)
-        #emprove_core.backprojectParticles(p, outmap ,nx, ny, nz,1,phi,theta,psi,shiftX,shiftY)
-        projection_ft = fft2(projection)
-        kz, ky, kx = np.mgrid[:nz, :ny, :nx] - nx // 2
-        R = get_inverse_rotation_matrix(phi0, theta0, psi0)
-        # Apply a rotation around the z-axis using the angles_psi parameter
-        rotated_coords = np.dot(R, np.array([kx.ravel(), ky.ravel(), kz.ravel()]))
-        kx_rot, ky_rot, kz_rot = rotated_coords.reshape(3, nz, ny, nx)
-        # Create an interpolating function for the 2D Fourier Transform of the projection
-        interp_func = RegularGridInterpolator(
-            (np.arange(ny), np.arange(nx)),
-            projection_ft,
-            bounds_error=False,
-            fill_value=0
-        )
-
-        # Evaluate the interpolating function at the coordinates of the 3D Fourier space
-        interpolated_values = interp_func(np.column_stack([ky_rot.ravel(), kx_rot.ravel()]))
-        
-        # Reshape the interpolated values to match the shape of the 3D Fourier space
-        fourier_slice = interpolated_values.reshape((nz, ny, nx))
-        
-        fourier_3d += fourier_slice
-
-    #normalize
-    fourier_3d /= counter
-    #outmapComplex[outmapCounter == 0] = 0
-    #non_zero_indices = outmapCounter != 0
-    #outmapComplex[non_zero_indices] /= outmapCounter[non_zero_indices]
-    #outmap_inverse_fourier = np.real(ifftn(fftshift(outmapComplex)))
-    reconstructed_object = np.real(fftshift(ifftn(ifftshift(fourier_3d))))
-
-    #outmap_inverse_fourier_temp = np.real(ifftn(fftshift(outmapComplex)))
-    #outmap_inverse_fourier = np.roll(outmap_inverse_fourier_temp, shift=(nx//2, ny//2, nz//2), axis=(0, 1, 2))
-
-    # Save the final reconstructed volume
-    emprove_core.WriteMRC(reconstructed_object.flatten().tolist(), outputMRC ,nx, ny, nz,1)
-
-
-
-
-
-emprove_reconstruct_volume = command.add_parser (
-    "reconstruct_volume", description="reconstruct a volume, based on the star file", help='reconstruct a volume, based on the star file'
+#################################
+## equalize_images 
+emprove_equalize_images = command.add_parser (
+    "equalize_images", description="equalize images", help='equalize images'
 )
-emprove_reconstruct_volume.add_argument("--i", required=True, type=str, help="input star file")
-emprove_reconstruct_volume.add_argument("--subset", required=False, type=str, default="", help="file with the input mask mrc map")
-emprove_reconstruct_volume.add_argument("--mask", required=False, type=str, default="", help="file with the input mask mrc map")
-emprove_reconstruct_volume.add_argument("--padding", required=False, type=int, default=2, help="padding value for the mask, default=2")
-emprove_reconstruct_volume.add_argument("--o", required=True, type=str, help="output mrc map")
-def reconstruct_volume(args):
-    #print("ART 3D reconstruction")
-    #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #ART_3D_reconstruction(args.i, args.o,iterations=1, device=device)
-    print("FBP reconstruction")
-    #evice = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #FBP_reconstruction(args.i, args.o,device=device)
-    FBP_reconstruction_cpp(args.i, args.o)
+emprove_equalize_images.add_argument("--i", required=True, nargs='+', type=str, help="files with the input MRC maps")
+emprove_equalize_images.add_argument("--o_suffix", default='_amplEqualized', type=str, help="suffix to add before the file extension")
+emprove_equalize_images.add_argument("--dir", default='./', type=str, help="output directory")
 
 
-
-emprove_test = command.add_parser (
-    "test", description="reconstruct a volume, based on the star file", help='reconstruct a volume, based on the star file'
-)
-emprove_test.add_argument("--i", required=True, type=str, help="input star file")
-emprove_test.add_argument("--o", required=False, type=str, default="", help="output star file")
-def test(args):
-    print("test")
-    import pandas as pd
-    df = pd.DataFrame({"_rlnClassNumber": ["1","4","1"]})
-    starHandler.update_star_columns_from_sections(args.i, args.o,'particles',df)
-
-#    df = pd.DataFrame({"_rlnVoltage6": ["323"]})
-#    starHandler.update_star_columns_from_sections(args.i, args.o,'optics',df)
-
-#    starHandler.delete_star_columns_from_sections(args.i, args.o, 'optics', '_rlnImage')
-
-#    starHandler.delete_star_columns_from_sections(args.i, args.o, 'particles', '_rlnAngle')
-#    df = starHandler.merge_star_section(args.i)
-#    print (df)
-
-
-
-
-
-
-
-def gaussian_derivative(input_img, sigma, order, axis):
-    """
-    This function takes an image, performs Gaussian smoothing, and calculates the derivative of the 
-    smoothed image. The order of the derivative (1st or 2nd) and the axis along which the derivative is calculated 
-    can be specified. The smoothing is done using a Gaussian kernel with a specified standard deviation ('sigma').
-    """
-    if order not in [0, 1, 2]:
-        raise ValueError("Order must be 0, 1 or 2: 0 is blurring, 1 is first derivative, 2 is second derivative")
-
-    # Validate axis
-    if axis < 0 or axis >= len(input_img.shape):
-        raise ValueError("Invalid axis, 0 is x axis, 1 is y axis, and so on")
-    axis=input_img.ndim-axis-1
-
-    # Apply Gaussian smoothing
-    smoothed_img = ndi.gaussian_filter(input_img, sigma=sigma, mode='mirror')
-
-    # For 0th order derivative (i.e., just the blur)
-    if order == 0:
-        return smoothed_img
-
-    # Calculate derivatives
-    if order == 1:
-        # Calculate first derivative
-        # Use np.gradient to calculate the derivative
-        # This will automatically handle the differences and keep the shape consistent
-        derivatives = np.gradient(smoothed_img, axis=axis)
-    elif order == 2:
-        # Calculate second derivative
-        # Apply the gradient function twice
-        first_derivatives = np.gradient(smoothed_img, axis=axis)
-        derivatives = np.gradient(first_derivatives, axis=axis)
-    return derivatives
-
-
-import torch
-import torch.nn.functional as F
-
-def gaussian_derivative_torch(input_img, sigma, order, axis, device="cpu"):
-    """
-    This function takes an image, performs Gaussian smoothing, and calculates the derivative of the 
-    smoothed image. The order of the derivative (1st or 2nd) and the axis along which the derivative is calculated 
-    can be specified. The smoothing is done using a Gaussian kernel with a specified standard deviation ('sigma').
-    """
-    if order not in [0, 1, 2]:
-        raise ValueError("Order must be 0, 1 or 2: 0 is blurring, 1 is first derivative, 2 is second derivative")
-
-    # Validate axis
-    if axis < 0 or axis >= len(input_img.shape):
-        raise ValueError("Invalid axis, 0 is x axis, 1 is y axis, and so on")
-
-    # PyTorch's gaussian_filter equivalent
-    smoothed_img = F.gaussian_blur(input_img, kernel_size=int(3*sigma), sigma=sigma)
-
-    # For 0th order derivative (i.e., just the blur)
-    if order == 0:
-        return smoothed_img
-
-    # Calculate derivatives
-    if order == 1:
-        # Calculate first derivative
-        derivatives = torch.gradient(smoothed_img, dim=axis)
-    elif order == 2:
-        # Calculate second derivative
-        first_derivatives = torch.gradient(smoothed_img, dim=axis)
-        derivatives = torch.gradient(first_derivatives, dim=axis)
-
-    return derivatives
-
-
-def cross_correlation(image1, image2, mask=None):
-    """
-    This function calculates the normalized cross-correlation between two n-dimensional images, 
-    given a mask. The mask is used to ignore the corresponding points in the images from the calculation of 
-    cross-correlation. The function returns a single correlation value.
-    """
-
-    assert image1.shape == image2.shape, "Images must be the same size"
-    result = 0
-    norm1 = 0
-    norm2 = 0
-
-    if mask is not None:
-        mask = np.array(mask, dtype=bool)
-
-    sum1 = 0
-    sum2 = 0
+def equalize_images(args):
+    fourier_transforms = []
+    sizes = []
+    sum_amplitudes = None
     count = 0
 
-    for index, value in np.ndenumerate(image1):
-        if mask is None or mask[index]:
-            sum1 += image1[index]
-            sum2 += image2[index]
-            count += 1
+    # First pass: Compute Fourier transforms and sum their amplitudes
+    for input_file in args.i:
+        sizeMap = emprove_core.sizeMRC(input_file)
+        inputMap = np.array(emprove_core.ReadMRC(input_file))
+        inputMap = np.reshape(inputMap, sizeMap)
 
-    mean1 = sum1 / count
-    mean2 = sum2 / count
+        spacingMRC = round(emprove_core.spacingMRC(input_file),4)
+        #print ("spacing=",spacingMRC)
 
-    # Subtract means from images and compute the cross-correlation, 
-    # considering the mask if provided
-    for index, value in np.ndenumerate(image1):
-        if mask is None or mask[index]:
-            val1 = image1[index] - mean1
-            val2 = image2[index] - mean2
-            result += val1 * val2
-            norm1 += val1**2
-            norm2 += val2**2
+        ft_inputMap = fftn(inputMap)
+        amplitude = np.abs(ft_inputMap)
 
-    # Normalize result
-    result /= np.sqrt(norm1 * norm2)
+        if sum_amplitudes is None:
+            sum_amplitudes = np.zeros_like(amplitude, dtype=np.complex128)
 
-    return max(0,result)
+        sum_amplitudes += amplitude
+        fourier_transforms.append(ft_inputMap)
+        sizes.append(sizeMap)
+        count += 1
 
-
-def cross_correlation_torch(image1, image2, mask, device="cpu"):
-    """
-    This function calculates the normalized cross-correlation between two n-dimensional images, 
-    given a mask. The mask is used to ignore the corresponding points in the images from the calculation of 
-    cross-correlation. The function returns a single correlation value.
-    """
-    assert image1.shape == image2.shape, "Images must be the same size"
-    sum1 = torch.sum(image1[mask]) if mask is not None else torch.sum(image1)
-    sum2 = torch.sum(image2[mask]) if mask is not None else torch.sum(image2)
-    count = torch.sum(mask) if mask is not None else torch.numel(image1)
-    mean1 = sum1 / count
-    mean2 = sum2 / count
-    val1 = image1 - mean1
-    val2 = image2 - mean2
-    result = torch.sum(val1 * val2)
-    norm1 = torch.sum(val1**2)
-    norm2 = torch.sum(val2**2)
-    result /= torch.sqrt(norm1 * norm2)
-    return torch.clamp(result, min=0)
+    # Calculate average amplitude
+    average_amplitude = sum_amplitudes / count
+    if not os.path.exists(args.dir):
+        os.makedirs(args.dir)
 
 
+    # Second pass: Replace amplitude and inverse Fourier transform
+    for i, ft_map in enumerate(fourier_transforms):
+        modified_ft = average_amplitude * (ft_map / np.abs(ft_map))
+        modified_map = np.real(ifftn(modified_ft))
+        nx, ny, nz = sizes[i]
+        input_file = args.i[i]
+        base_name, ext = os.path.splitext(os.path.basename(input_file))
+        output_filename = f"{base_name}{args.o_suffix}{ext}"
+        output_filename = os.path.join(args.dir, output_filename)
+        emprove_core.WriteMRC(modified_map.flatten().tolist(), output_filename, nx, ny, nz, spacingMRC)
 
-def SCI(I, RI, sigma=1.0, MaskImage=None):
-    """
-    This function calculates the Structural Cross-Correlation Index (SCI) between two n-dimensional images. 
-    The SCI is a measure of the similarity between two images. The process involves performing a Fourier transform 
-    on the images, calculating an average amplitude spectrum, applying that to the original images, and then 
-    calculating cross-correlation of the original and derivative images.
-    """
-    assert I.shape == RI.shape, "Images must be the same size"
-    I_fft = np.fft.fftn(I)
-    RI_fft = np.fft.fftn(RI)
-    I_abs_fft = np.abs(I_fft) + 1e-7
-    RI_abs_fft = np.abs(RI_fft) + 1e-7
-    ampAvg = 0.5 * (I_abs_fft + RI_abs_fft)
-    I_out = np.fft.ifftn(I_fft * (ampAvg / I_abs_fft)).real
-    RI_out = np.fft.ifftn(RI_fft * (ampAvg / RI_abs_fft)).real
+#################################
+## scores_to_csv 
+def retrieveScoringTag(columnList):
+    def check_sore_tag_correct_format(s):
+        # Splitting the string by underscores
+        parts = s.split('_')
+        # Checking the structure of the string
+        if len(parts) == 8 and parts[1] == 'emprove' and parts[2] == 'SCI' and parts[5] == 'scored' and parts[6] == 'selection':
+            return True
+        return False
+    matching_string = None
+    for name in columnList:
+        if check_sore_tag_correct_format(name):
+            matching_string = name
+    return matching_string
 
-    ndim = I_out.ndim
-    scoreSCI_final = cross_correlation(RI_out, I_out, MaskImage)
-    for axis in range(ndim):
-        I_out_d1 = gaussian_derivative(I_out, sigma, 1, axis)
-        RI_out_d1 = gaussian_derivative(RI_out, sigma, 1, axis)
-        I_out_d2 = gaussian_derivative(I_out, sigma, 2, axis)
-        RI_out_d2 = gaussian_derivative(RI_out, sigma, 2, axis)
-        scoreSCI_final *= cross_correlation(RI_out_d1, I_out_d1, MaskImage) 
-        scoreSCI_final *= cross_correlation(RI_out_d2, I_out_d2, MaskImage)
-    return scoreSCI_final
+emprove_scores_to_csv = command.add_parser (
+    "scores_to_csv", description="scores_to_csv", help='scores_to_csv'
+)
+emprove_scores_to_csv.add_argument("--i", required=True, nargs='+', type=str, help="files with the input scores")
+emprove_scores_to_csv.add_argument("--csv", default='scoreFile.csv', type=str, help="score_file_to_csv")
+emprove_scores_to_csv.add_argument("--o", default='scoreFile.star', type=str, help="scoreFile.star")
 
-def SCI_torch(I, RI, MaskImage, sigma=1.0, device="cpu"):
-    """
-    This function calculates the Structural Cross-Correlation Index (SCI) between two n-dimensional images. 
-    The SCI is a measure of the similarity between two images. The process involves performing a Fourier transform 
-    on the images, calculating an average amplitude spectrum, applying that to the original images, and then 
-    calculating cross-correlation of the original and derivative images.
-    """
-    assert I.shape == RI.shape, "Images must be the same size"
-    I = I.to(device)
-    RI = RI.to(device)
-    #if MaskImage is not None:
-    #    MaskImage = MaskImage.to(device)
-
-    I_fft = torch.fft.fftn(I)
-    RI_fft = torch.fft.fftn(RI)
-    I_abs_fft = torch.abs(I_fft) + 1e-7
-    RI_abs_fft = torch.abs(RI_fft) + 1e-7
-    ampAvg = 0.5 * (I_abs_fft + RI_abs_fft)
-    I_out = torch.fft.ifftn(I_fft * (ampAvg / I_abs_fft)).real
-    RI_out = torch.fft.ifftn(RI_fft * (ampAvg / RI_abs_fft)).real
-
-    ndim = I_out.ndim
-    scoreSCI_final = cross_correlation_torch(RI_out, I_out, MaskImage, device)
-    for axis in range(ndim):
-        I_out_d1 = gaussian_derivative_torch(I_out, sigma, 1, axis, device)
-        RI_out_d1 = gaussian_derivative_torch(RI_out, sigma, 1, axis, device)
-        I_out_d2 = gaussian_derivative_torch(I_out, sigma, 2, axis, device)
-        RI_out_d2 = gaussian_derivative_torch(RI_out, sigma, 2, axis, device)
-        scoreSCI_final *= cross_correlation_torch(RI_out_d1, I_out_d1, MaskImage, device)
-        scoreSCI_final *= cross_correlation_torch(RI_out_d2, I_out_d2, MaskImage, device)
-    return scoreSCI_final
+def scores_to_csv(args):
+    result_df = pd.DataFrame()
+    file_class_mapping = {file_name: index + 1 for index, file_name in enumerate(args.i)}
+    reference_star=None
+    for input_file in args.i:
+        if reference_star == None:
+            reference_star=input_file
+        columns=starHandler.header_columns(input_file)
+        tagScore=retrieveScoringTag(columns)
+        referenceColumns = starHandler.readColumns(input_file, [tagScore])
+        result_df[input_file] = referenceColumns[tagScore]
+    result_df['Max_Score_File'] = result_df.idxmax(axis=1)
+    result_df['_rlnClassNumber'] = result_df['Max_Score_File'].map(file_class_mapping)
+    result_df.to_csv(args.csv)
+    #now update the class on the star file
+    version=starHandler.infoStarFile(input_file)[2]
+    main_section_name="particles"
+    if version=="relion_v30":
+        main_section_name=""
+    starHandler.removeColumnsTagsStartingWith(reference_star, args.o, "_emprove_")
+    starHandler.replace_star_columns_from_sections(args.o, args.o, main_section_name,'_rlnClassNumber',result_df)
+    
 
 
+
+#################################
+emprove_extract_particles_from_label_value = command.add_parser (
+    "extract_particles_from_label_value", description="extract_particles_from_label_value", help='extract_particles_from_label_value'
+)
+emprove_extract_particles_from_label_value.add_argument("--i", required=True, type=str, help="input star file")
+emprove_extract_particles_from_label_value.add_argument("--label", required=True, type=str, help="label to extract values from")
+emprove_extract_particles_from_label_value.add_argument("--value", required=True, type=str, help="value to extract")
+emprove_extract_particles_from_label_value.add_argument("--o", required=True, type=str, help="output star file")
+def extract_particles_from_label_value(args):
+    version=starHandler.infoStarFile(args.i)[2]
+    main_section_name="particles"
+    if version=="relion_v30":
+        main_section_name=""
+    starHandler.extract_particles_from_label_from_sections(args.i, args.o, main_section_name, args.label, args.value)
 
 
 def main(command_line=None):
@@ -1039,12 +769,12 @@ def main(command_line=None):
         rotation_average_2d(args)
     elif args.command == "rotation_average_stack":
         rotation_average_stack(args)
-    elif args.command == "project_volume":
-        project_volume(args)
-    elif args.command == "reconstruct_volume":
-        reconstruct_volume(args)
-    elif args.command == "test":
-        test(args)
+    elif args.command == "equalize_images":
+        equalize_images(args)
+    elif args.command == "scores_to_csv":
+        scores_to_csv(args)
+    elif args.command == "extract_particles_from_label_value":
+        extract_particles_from_label_value(args)
     else:
         emprove_parser.print_help()
 
