@@ -1152,6 +1152,20 @@ static PyObject * emprove_sizeMRC(PyObject *self, PyObject *args){
     return Py_BuildValue("kkk",nx,ny,nz);
 }
 
+static PyObject * emprove_spacingMRC(PyObject *self, PyObject *args){
+
+    char *map3D_in;
+
+    if (!PyArg_ParseTuple(args, "s", &map3D_in))
+        return NULL;
+ 
+      MRCHeader mapHeader;
+      readHeaderMrc(map3D_in, mapHeader);
+      double spacing = calculateXPixelSpacing(mapHeader);
+    return Py_BuildValue("d",spacing);
+}
+
+
 // ****************************
 // createMRC_emptyImage
 static PyObject * emprove_writeEmptyMRC(PyObject *self, PyObject *args){
@@ -1454,6 +1468,7 @@ static PyMethodDef emprove_funcs[] = {
     {"ReadMRC",  (PyCFunction)emprove_ReadMRC, METH_VARARGS, "read mrc File"},
     {"WriteEmptyMRC",  (PyCFunction)emprove_writeEmptyMRC, METH_VARARGS, "read mrc File"},
     {"sizeMRC",  (PyCFunction)emprove_sizeMRC, METH_VARARGS, "size mrc File"},
+    {"spacingMRC",  (PyCFunction)emprove_spacingMRC, METH_VARARGS, "pixel spacing mrc File"},
     {"ReadMrcSlice",  (PyCFunction)emprove_ReadMrcSlice, METH_VARARGS, "read mrc slice from File"},
     {"ReplaceMrcSlice",  (PyCFunction)emprove_replaceMrcSlice, METH_VARARGS, "write mrc slice on File"},
     {"CtfCenteredImage",  (PyCFunction)emprove_CtfCenteredImage, METH_VARARGS, "produce CtfCenteredImage"},
