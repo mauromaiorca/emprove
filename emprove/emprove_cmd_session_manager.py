@@ -243,7 +243,7 @@ def find_emprove_ranking_tag(elements):
 
 
 #######################################################
-## GENERATE run script
+## GENERATE PARTICLE SELECTION run script
 def generate_run_script(fileSettings):
     with open(fileSettings, 'r') as file:
         data = toml.load(fileSettings)
@@ -325,7 +325,10 @@ process_iteration() {
     run_script_cmd += '     process_iteration "$ite" "$workingDir" "$masked_crop_otpion" \n'
     run_script_cmd += 'done\n\n\n'
 
-    runScriptName=str(data.get("session_name"))+"_run.sh"
+
+    #runScriptName=str(data.get("session_name"))+"_run.sh"
+    runScriptName=os.path.join(data.get("dir", "./"),data.get("session_name"),str(data.get("session_name"))+"_run.sh")
+
     with open(runScriptName, 'w') as f:
         f.write(run_script_cmd)
     os.chmod(runScriptName, 0o755)
@@ -339,32 +342,32 @@ process_iteration() {
 #######################################################
 ## CREATE NEW SESSION, what the user has to call first
 #######################################################
-emprove_new_session = command.add_parser (
-    "new_session", description="new_session", help='Create a new session with experiment parameters'
+emprove_new_select_session = command.add_parser (
+    "new_select_session", description="new_select_session", help='Create a new selection session with experiment parameters'
 )
-emprove_new_session.add_argument("--name", required=True, type=str, help="name of the new session, it creates a dir with that name, and a toml file in that directory with that name")
-emprove_new_session.add_argument("--particles", required=True, type=str, help="star file with list of particles")
-emprove_new_session.add_argument("--map", required=True, type=str, help="reference map, can be first half map if map2 is insterted")
-emprove_new_session.add_argument("--map2", required=False, type=str, help="second half maps")
-emprove_new_session.add_argument("--mask", required=True, type=str, help="mask for the region")
-emprove_new_session.add_argument("--angpix", required=False, type=str, help="pixel spacing in Ansgtrom, if not given it is inferred from the map")
-emprove_new_session.add_argument("--sigma", required=False, type=float, default=1.0, help="sigma used for the SCI score")
-emprove_new_session.add_argument("--CC", action='store_true', help="use CC score instead of SCI score")
-emprove_new_session.add_argument("--maskingCrop", action='store_true', help="in the sake of speed, cropping the file according to mask for computing locres")
-emprove_new_session.add_argument("--maxSelections", required=False, default=8, type=int, help="Max number of selections (by default 8 selections)")
-emprove_new_session.add_argument("--numRecs", required=False, default=10, type=int, help="num Samplin gReconstructions. Number of reconstructions for each selections. More reconstruction, more precise is the selection")
-emprove_new_session.add_argument("--randomSeed", action='store_true', help="Same random sequence at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
-#emprove_new_session.add_argument("--signalSubtraction", action='store_false', help="workWithSignalSubtraction")
-#emprove_new_session.add_argument("--randomSeed", required=False, default=8, type=int, help="Same random sequene at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
-emprove_new_session.add_argument("--mpi", required=False, default=5, type=str, help="number of mpi processes")
-emprove_new_session.add_argument("--numViews", required=False, default=350, type=str, help="number of euler views for ranking")
+emprove_new_select_session.add_argument("--name", required=True, type=str, help="name of the new session, it creates a dir with that name, and a toml file in that directory with that name")
+emprove_new_select_session.add_argument("--particles", required=True, type=str, help="star file with list of particles")
+emprove_new_select_session.add_argument("--map", required=True, type=str, help="reference map, can be first half map if map2 is insterted")
+emprove_new_select_session.add_argument("--map2", required=False, type=str, help="second half maps")
+emprove_new_select_session.add_argument("--mask", required=True, type=str, help="mask for the region")
+emprove_new_select_session.add_argument("--angpix", required=False, type=str, help="pixel spacing in Ansgtrom, if not given it is inferred from the map")
+emprove_new_select_session.add_argument("--sigma", required=False, type=float, default=1.0, help="sigma used for the SCI score")
+emprove_new_select_session.add_argument("--CC", action='store_true', help="use CC score instead of SCI score")
+emprove_new_select_session.add_argument("--maskingCrop", action='store_true', help="in the sake of speed, cropping the file according to mask for computing locres")
+emprove_new_select_session.add_argument("--maxSelections", required=False, default=8, type=int, help="Max number of selections (by default 8 selections)")
+emprove_new_select_session.add_argument("--numRecs", required=False, default=10, type=int, help="num Samplin gReconstructions. Number of reconstructions for each selections. More reconstruction, more precise is the selection")
+emprove_new_select_session.add_argument("--randomSeed", action='store_true', help="Same random sequence at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
+#emprove_new_select_session.add_argument("--signalSubtraction", action='store_false', help="workWithSignalSubtraction")
+#emprove_new_select_session.add_argument("--randomSeed", required=False, default=8, type=int, help="Same random sequene at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
+emprove_new_select_session.add_argument("--mpi", required=False, default=5, type=str, help="number of mpi processes")
+emprove_new_select_session.add_argument("--numViews", required=False, default=350, type=str, help="number of euler views for ranking")
 
 
-#emprove_new_session.add_argument("--comparisonType", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
-#emprove_new_session.add_argument("--typeSession", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
+#emprove_new_select_session.add_argument("--comparisonType", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
+#emprove_new_select_session.add_argument("--typeSession", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
 
 
-def new_session(args):
+def new_select_session(args):
     # Create the directory if it doesn't exist
     if not os.path.exists(args.name):
         os.makedirs(args.name)
@@ -466,7 +469,7 @@ process_random() {
     run_script_cmd += './${workingDir}/script_reconstructions.sh'
     run_script_cmd += '\n\n\n'
 
-    runScriptName=os.path.join(data.get("dir", "./"),str(data.get("session_name"))+"_run.sh")
+    runScriptName=os.path.join(data.get("dir", "./"),data.get("session_name"),str(data.get("session_name"))+"_run.sh")
     with open(runScriptName, 'w') as f:
         f.write(run_script_cmd)
     os.chmod(runScriptName, 0o755)
@@ -727,8 +730,8 @@ def main(command_line=None):
         random_selection_session(args)
     elif args.command == "classification_session":
         classification_session(args)
-    elif args.command == "new_session":
-        new_session(args)
+    elif args.command == "new_select_session":
+        new_select_session(args)
     else:
         emprove_parser.print_help()
 
