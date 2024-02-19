@@ -614,7 +614,7 @@ typedef struct inputParametersType {
 
 
 
-    char * extractFromSimilarParametersTemplateFile;
+    char * extractFromSimilarParametersTemplateFullFile;
     char * ParametersToCompare;
     char * outputImageTag;
     bool haveBackupImageNameTag;
@@ -715,17 +715,17 @@ void usage(  char ** argv ){
     std::cerr<<"              --extractCommonImages commonImagesStarFile.star\n";
     std::cerr<<"                    (extract images in the starFileIn.star AND in commonImagesStarFile.star)\n";
 
-    std::cerr<<"              --extractFromSimilarParameters extractFromSimilarParametersTemplateFile.star ParametersToCompare=[angles,origin,defocus] outputImageTag=[_emprove_originalTag_rlnImageName]\n";
+    std::cerr<<"              --extractFromSimilarParameters extractFromSimilarParametersTemplateFullFile.star ParametersToCompare=[angles,origin,defocus] outputImageTag=[_emprove_originalTag_rlnImageName]\n";
     std::cerr<<"                    (Useful for cryosparc's particle subtraction. It extract images in the starFileIn.star that has similar parameters from the template image, and put the filename of the template image.)\n";
 
-
+    std::cerr<<"              --updateParameters templateForUpdateStarFile.star parametersToUpdate=[class,angles,euler,psi,origin,ctf]\n";
     std::cerr<<"              --backupImageNameTag  outputImageTag=[_emprove_originalTag_rlnImageName]\n";
 
 
     std::cerr<<"              --invertTagName tag1_toInvert tag2_toInvert\n";
 
 
-    std::cerr<<"              --extractFromSimilarParameters extractFromSimilarParametersTemplateFile.star ParametersToCompare=[angles,origin,defocus] outputImageTag=[_emprove_originalTag_rlnImageName]\n";
+    std::cerr<<"              --extractFromSimilarParameters extractFromSimilarParametersTemplateFullFile.star ParametersToCompare=[angles,origin,defocus] outputImageTag=[_emprove_originalTag_rlnImageName]\n";
 
     std::cerr<<"              --classSelect classNameToSelect\n";
 
@@ -797,7 +797,7 @@ void retrieveInputParameters(inputParametersType * parameters, int argc, char** 
     parameters->parametersToUpdate=(char *)"angles,origin";
 
 
-    parameters->extractFromSimilarParametersTemplateFile=NULL;
+    parameters->extractFromSimilarParametersTemplateFullFile=NULL;
     parameters->ParametersToCompare=(char *)"angles,origin,defocus";
     parameters->outputImageTag=(char *)"_emprove_originalTag_rlnImageName";
 
@@ -1241,7 +1241,7 @@ void retrieveInputParameters(inputParametersType * parameters, int argc, char** 
           for (unsigned int jj=ii+1; jj<argc ; jj++, idx++){
             std::string subparamStr(argv[jj]);
             if (!subparamStr.substr(0,2).compare("--")) break;
-            if (idx==0) parameters->extractFromSimilarParametersTemplateFile=argv[jj];
+            if (idx==0) parameters->extractFromSimilarParametersTemplateFullFile=argv[jj];
             if (idx==1) parameters->ParametersToCompare=argv[jj];
             if (idx==2) parameters->outputImageTag=argv[jj];
           }
@@ -2772,46 +2772,46 @@ _rlnMicrographName #14
    // ###################################################################
    // ##  It extract images in the starFileIn.star that has similar parameters from the template       
    // ##  Useful for cryosparc's particle subtraction. 
-if ( parameters.extractFromSimilarParametersTemplateFile && parameters.starFileOut){
+if ( parameters.extractFromSimilarParametersTemplateFullFile && parameters.starFileOut){
         if (parameters.verboseOn) std::cerr<<"extract images in the starFileIn.star that has similar parameters from target file\n";
 
-      int maxHeaderLabel=getMaxHeaderLabelNumber (parameters.extractFromSimilarParametersTemplateFile);
+      int maxHeaderLabel=getMaxHeaderLabelNumber (parameters.extractFromSimilarParametersTemplateFullFile);
       std::vector<std::string> rlnImageNameVector;
       readStar(rlnImageNameVector, "_rlnImageName", starFileIn);
        std::string ParametersToCompare(parameters.ParametersToCompare);
        std::vector <int> listTagIdxInput;
        std::vector <int> listTagIdxTemplate;
-       const int relionStarFileVersion=checkStarFileVersion (parameters.extractFromSimilarParametersTemplateFile);
+       const int relionStarFileVersion=checkStarFileVersion (parameters.extractFromSimilarParametersTemplateFullFile);
 
 
        if ( ParametersToCompare.find("angles")!=std::string::npos  ){
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnAngleRot",starFileIn));
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnAngleTilt",starFileIn));
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnAnglePsi",starFileIn));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAngleRot",parameters.extractFromSimilarParametersTemplateFile));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAngleTilt",parameters.extractFromSimilarParametersTemplateFile));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAnglePsi",parameters.extractFromSimilarParametersTemplateFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAngleRot",parameters.extractFromSimilarParametersTemplateFullFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAngleTilt",parameters.extractFromSimilarParametersTemplateFullFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnAnglePsi",parameters.extractFromSimilarParametersTemplateFullFile));
        }
        if ( ParametersToCompare.find("origin")!=std::string::npos ){
            if (relionStarFileVersion==3100){
                listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnOriginXAngst",starFileIn));
                listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnOriginYAngst",starFileIn));
-               listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginXAngst",parameters.extractFromSimilarParametersTemplateFile));
-               listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginYAngst",parameters.extractFromSimilarParametersTemplateFile));
+               listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginXAngst",parameters.extractFromSimilarParametersTemplateFullFile));
+               listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginYAngst",parameters.extractFromSimilarParametersTemplateFullFile));
            }else{
              listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnOriginX",starFileIn));
              listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnOriginY",starFileIn));
-             listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginX",parameters.extractFromSimilarParametersTemplateFile));
-             listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginY",parameters.extractFromSimilarParametersTemplateFile));
+             listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginX",parameters.extractFromSimilarParametersTemplateFullFile));
+             listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnOriginY",parameters.extractFromSimilarParametersTemplateFullFile));
            }
        }
        if ( ParametersToCompare.find("defocus")!=std::string::npos ){
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnDefocusU",starFileIn));
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnDefocusV",starFileIn));
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnDefocusAngle",starFileIn));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusU",parameters.extractFromSimilarParametersTemplateFile));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusV",parameters.extractFromSimilarParametersTemplateFile));
-         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusAngle",parameters.extractFromSimilarParametersTemplateFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusU",parameters.extractFromSimilarParametersTemplateFullFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusV",parameters.extractFromSimilarParametersTemplateFullFile));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnDefocusAngle",parameters.extractFromSimilarParametersTemplateFullFile));
        }
        std::vector<std::string> intputImageTagVector;
        readStar(intputImageTagVector, "_rlnImageName", starFileIn);
@@ -2824,7 +2824,7 @@ if ( parameters.extractFromSimilarParametersTemplateFile && parameters.starFileO
        }
 
        std::vector<std::string> templateImageTagVector;
-       readStar(templateImageTagVector, "_rlnImageName", parameters.extractFromSimilarParametersTemplateFile);
+       readStar(templateImageTagVector, "_rlnImageName", parameters.extractFromSimilarParametersTemplateFullFile);
        std::vector<long int> templateImageNumberVector;
        for (long int ii=0; ii<templateImageTagVector.size(); ii++){
             int startIdx=templateImageTagVector[ii].find("@");
@@ -2839,9 +2839,9 @@ if ( parameters.extractFromSimilarParametersTemplateFile && parameters.starFileO
         fileOutput.close();
         fileOutput.open (parameters.starFileOut, std::ofstream::out | std::ofstream::app);   
         long int startFileIn=getStarStart(starFileIn);
-        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFile);
+        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFullFile);
         std::ifstream inputFileStream(starFileIn);
-        std::ifstream templateFileStream(parameters.extractFromSimilarParametersTemplateFile);
+        std::ifstream templateFileStream(parameters.extractFromSimilarParametersTemplateFullFile);
         std::string strLineIn;
         for (int counter=0;counter<startFileIn;counter++){
            std::getline(inputFileStream, strLineIn);
@@ -2869,7 +2869,7 @@ if ( parameters.extractFromSimilarParametersTemplateFile && parameters.starFileO
 
         std::vector<std::string> rlnResultNameVector(templateImageTagVector.size());
         long int inputImageNameIdx=getStarHeaderItemIdx("_rlnImageName",starFileIn);
-        long int templateImageNameIdx=getStarHeaderItemIdx("_rlnImageName",parameters.extractFromSimilarParametersTemplateFile);
+        long int templateImageNameIdx=getStarHeaderItemIdx("_rlnImageName",parameters.extractFromSimilarParametersTemplateFullFile);
 
         std::vector<bool> assignedLine(rlnImageNameVector.size(), false);
         long int inputFileIdx=-1;
@@ -2952,7 +2952,7 @@ if ( parameters.extractFromSimilarParametersTemplateFile && parameters.starFileO
 if ( parameters.DoCheckForSimilarImages && parameters.starFileOut){
       if (parameters.verboseOn) std::cerr<<"Do Check For Similar Images (based on parameters)\n";
 
-      int maxHeaderLabel=getMaxHeaderLabelNumber (parameters.extractFromSimilarParametersTemplateFile);
+      int maxHeaderLabel=getMaxHeaderLabelNumber (parameters.extractFromSimilarParametersTemplateFullFile);
       std::vector<std::string> rlnImageNameVector;
       readStar(rlnImageNameVector, "_rlnImageName", starFileIn);
 
@@ -2970,7 +2970,7 @@ if ( parameters.DoCheckForSimilarImages && parameters.starFileOut){
         fileOutput.close();
         fileOutput.open (parameters.starFileOut, std::ofstream::out | std::ofstream::app);   
         long int startFileIn=getStarStart(starFileIn);
-        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFile);
+        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFullFile);
         std::ifstream inputFileStream(starFileIn);
         std::string strLineIn;
         for (int counter=0;counter<startFileIn;counter++){
@@ -3041,9 +3041,9 @@ if ( parameters.haveBackupImageNameTag && parameters.starFileOut){
         fileOutput.close();
         fileOutput.open (parameters.starFileOut, std::ofstream::out | std::ofstream::app);   
         long int startFileIn=getStarStart(starFileIn);
-        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFile);
+        long int startFileTemplate=getStarStart(parameters.extractFromSimilarParametersTemplateFullFile);
         std::ifstream inputFileStream(starFileIn);
-        std::ifstream templateFileStream(parameters.extractFromSimilarParametersTemplateFile);
+        std::ifstream templateFileStream(parameters.extractFromSimilarParametersTemplateFullFile);
         std::string strLineIn;
         for (int counter=0;counter<startFileIn;counter++){
            std::getline(inputFileStream, strLineIn);
