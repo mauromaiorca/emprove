@@ -192,7 +192,7 @@ done
     ########################
     #####ASSESS LOCRES 
     assess_command = '''
-##############################
+#############################
 #######  ASSESS locres
 '''
     maskLocresFilename=args.mask
