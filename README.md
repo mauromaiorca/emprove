@@ -16,7 +16,7 @@ emprove_session_manager new_session \
             --map maps/J182_003_volume_map_half_A.mrc \
             --map2 maps/J182_003_volume_map_half_B.mrc \
             --mask maps/J185_maskLocal.mrc \
-            --apix 0.8400
+            --angpix 0.8400
 ```
 it creates a directory with the given name ("J182_emprove" in the example), and a script file to run, in this case J182_emprove_run.sh
 
