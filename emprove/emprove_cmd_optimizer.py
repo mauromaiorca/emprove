@@ -125,11 +125,9 @@ def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predi
             plt.savefig(outputImageFile, dpi=300, format='png', bbox_inches='tight')
         
         # Display the plot
-        if showPlot and ax is None:
+        if showPlot:
             plt.show()
-
-        if ax is None:
-            plt.close()  # Close the plot to free memory
+        plt.close()  # Close the plot to free memory
 
         return int(predicted_particle_number) if file_path else None
     return None
@@ -259,45 +257,53 @@ from scipy.interpolate import UnivariateSpline
 
 def skewed_gaussian(mean, skew_factor, size, seed=0, sampling_density_factor=0.15):
     #note: large scale translate into denser sampling
-    np.random.seed(seed)  # Set the random seed
-    values = np.random.normal(mean, mean*sampling_density_factor, size)
+    #skew_factor=value that determines the direction and magnitude of skewness in the generated distribution. Positive values skew the distribution to the right, and negative values skew it to the left.
+    np.random.seed(seed)
+    values = np.random.normal(mean, mean * sampling_density_factor, size)
     values = mean + skew_factor * (values - mean)
     return values
 
 def generate_particle_samples(predicted_particle_number, n_samples, min_val, max_val, sampling_density_factor=0.15, seed=0):
-    tmp_n_sample = n_samples
     final_samples = []
     counter = 0
-    while len(final_samples) <= n_samples:
+    global_max_val = max_val
+    skew_factor=-1.5
+    max_val = (max_val + 2 * predicted_particle_number) / 3.0  # Adjust max_val for skewness
+
+    while len(final_samples) < n_samples - 2:  # Adjust to leave space for the smallest and largest values
         counter += 1
-        particle_samples = skewed_gaussian(predicted_particle_number, -0.7, tmp_n_sample * 2, sampling_density_factor=sampling_density_factor, seed=seed)  # Generate extra to choose from
-        cap_min = max(0, min_val)
-        particle_samples = np.clip(particle_samples, cap_min, max_val)
-        particle_samples = np.append(particle_samples, max_val)
-        # Sort the particles
-        particle_samples = sorted(particle_samples)
-        # Ensure minimum separation
-        min_gap = (predicted_particle_number - min_val) / (tmp_n_sample - 2)
-        final_samples = [int(particle_samples[-1])]  # Start with max value
-        last_added = particle_samples[-1]
-        for p in reversed(particle_samples):
-            if abs(p - last_added) > min_gap and p not in final_samples:
-                final_samples.append(int(p))
-                last_added = p
-            if len(final_samples) == tmp_n_sample:
+        particle_samples = skewed_gaussian(predicted_particle_number, skew_factor, n_samples * 3, seed=seed, sampling_density_factor=sampling_density_factor)
+        particle_samples = np.clip(particle_samples, max(0, min_val), max_val)
+
+        # Sort and filter for minimum gap, avoiding duplicates, and preserving range
+        particle_samples = np.sort(particle_samples)
+        last_added = float('-inf')  # Initialize with a value that is always smaller
+        for p in particle_samples:
+            if len(final_samples) >= n_samples - 2 or p >= global_max_val:
                 break
-        tmp_n_sample += 1
+            if (p - last_added) >= (predicted_particle_number - min_val) / (n_samples - 1) and p not in final_samples:
+                final_samples.append(p)
+                last_added = p
+
+    # Ensure to include the largest values and predicted_particle_number/2
+    final_samples = [predicted_particle_number/2] + final_samples + [global_max_val]
+
+    # Convert to integers
+    final_samples = [int(value) for value in final_samples]
+
+    # Sort final samples and ensure we only have the desired number of samples, in case of duplicates near boundaries
     return sorted(final_samples)
 
 
 
-def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling, randomSeed=True):
+def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling, randomSeed=True, showPlot=False, outputImageFile=""):
     if not locresResultsCsvFile == "":
         df = pd.read_csv(locresResultsCsvFile)
-        predicted_particle_number = predict_min_particles(locresResultsCsvFile,showPlot=False)
+        predicted_particle_number = predict_min_particles(locresResultsCsvFile,  showPlot=showPlot, outputImageFile=outputImageFile)
+        print("predicted_particle_number = ", predicted_particle_number )
         min_val = df['numParticles'].min() * 2.0/3.0
         max_val = df['numParticles'].max()
-        sampling_density_factor=0.15
+        sampling_density_factor=0.25
     else:
         predicted_particle_number = maxNumberOfParticles
         min_val = maxNumberOfParticles * 1.0/3.0
@@ -307,7 +313,7 @@ def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, num
         seed = int(time.time())
     else:
         seed = 0
-
+     
     predicted_particles = generate_particle_samples(predicted_particle_number, number_of_sampling, min_val, max_val,sampling_density_factor=sampling_density_factor, seed=seed)
     return predicted_particles
 
@@ -323,7 +329,8 @@ emprove_automaticParticleSubsets = command.add_parser (
 emprove_automaticParticleSubsets.add_argument("--starFile", required=True, type=str, help="file with the input star file")
 emprove_automaticParticleSubsets.add_argument("--locres", required=False, type=str, default="", help="file with the previous locres evaluation file is")
 emprove_automaticParticleSubsets.add_argument("--save", required=False, type=str, default="", help="file where to save the particle to check in a csv fashon")
-emprove_automaticParticleSubsets.add_argument("--plot", action="store_false", help="Display the plot")
+emprove_automaticParticleSubsets.add_argument("--plot", action="store_true", help="Display the plot")
+emprove_automaticParticleSubsets.add_argument("--plotPrediction", action="store_true", help="Display the predictions for next plot")
 emprove_automaticParticleSubsets.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on an image file")
 emprove_automaticParticleSubsets.add_argument("--numSamples", required=False, type=int, default=10,  help="number of samples")
 #emprove_automaticParticleSubsets.add_argument("--pureRandom", action="store_true", help="pure random number, not reproducible")
@@ -345,10 +352,10 @@ def automaticParticleSubsets(args):
         expectedEstimatedParticlesNumber=num_non_null_items
 
     #print ("plot on file=",args.plotOnFile)
-    result=automaticParticleSubsetsCore(args.locres, num_non_null_items, args.numSamples, randomSeed=True)
+    result=automaticParticleSubsetsCore(args.locres, num_non_null_items, args.numSamples, showPlot=args.plot, outputImageFile=args.plotOnFile)
     print ("result automaticParticleSubsetsCore=",result)
-    predict_min_particles(args.locres, showPlot=False,predicted_particles=result, outputImageFile=args.plotOnFile)
-    print("Particles for performing selection",result)
+#    predict_min_particles(args.locres, showPlot=args.plot, predicted_particles=result, outputImageFile=args.plotOnFile)
+#    print("Particles for performing selection",result)
     if not args.save == "":
         directory = os.path.dirname(args.save)
         if directory and not os.path.exists(directory):
