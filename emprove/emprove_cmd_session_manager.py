@@ -304,7 +304,7 @@ process_iteration() {
     emprove_optimizer generate_overview --directory ${workingDir}
     targetMap1=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map1)
     targetMap2=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map2)
-    targetStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)
+    #targetStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)
     #sigma=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --sigma)
 
 '''

@@ -9,6 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.interpolate import UnivariateSpline
 import seaborn as sns
+import toml
+import csv
+import time
 
 emprove_parser = argparse.ArgumentParser(
     prog="emprove_optimizer",
@@ -118,6 +121,7 @@ def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predi
             directory = os.path.dirname(outputImageFile)
             if directory and not os.path.exists(directory):
                 os.makedirs(directory)
+            #print("saving on file ",outputImageFile)
             plt.savefig(outputImageFile, dpi=300, format='png', bbox_inches='tight')
         
         # Display the plot
@@ -208,7 +212,6 @@ emprove_getNumParticles.add_argument("--locres", required=True, type=str, help="
 emprove_getNumParticles.add_argument("--plot", action="store_true", help="Display the plot")
 emprove_getNumParticles.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on file")
 emprove_getNumParticles.add_argument("--save", required=False, default="", type=str, help="Save the best reconstruction particle on file")
-
 def getNumParticles(args):
     
     if (not os.path.isfile(args.locres)):
@@ -229,6 +232,23 @@ def getNumParticles(args):
             f.write(str(int(result)))
 
 
+
+#################################
+## Analyse reconstruction script
+emprove_plotOverview = command.add_parser (
+    "plotOverview", description="plot the overview", help='plot the overview'
+)
+emprove_plotOverview.add_argument("--overview", required=True, type=str, help="overviewFile")
+emprove_plotOverview.add_argument("--o", required=False, default="", type=str, help="output png file")
+def plotOverview(args):
+    if (not os.path.isfile(args.overview)):
+        print('ERROR: overview file \"',args.overview,'\" not existing')
+        exit()
+    data=overview_read_item_at_iteration(args.overview, 1)
+    print (data)
+
+
+
 #################################
 #################################
 ## automaticParticleSubsets Routine
@@ -244,50 +264,51 @@ def skewed_gaussian(mean, skew_factor, size, seed=0, sampling_density_factor=0.1
     values = mean + skew_factor * (values - mean)
     return values
 
-def generate_particle_samples(predicted_particle_number, n_samples, min_val, max_val,sampling_density_factor=0.15):
-    tmp_n_sample=n_samples
-    final_samples=[]
-    counter=0
-    while len(final_samples) <= n_samples :
-        counter+=1
-        particle_samples = skewed_gaussian(predicted_particle_number, -0.7, tmp_n_sample*2, sampling_density_factor=sampling_density_factor)  # Generate extra to choose from
-        cap_min=max(0, min_val)
+def generate_particle_samples(predicted_particle_number, n_samples, min_val, max_val, sampling_density_factor=0.15, seed=0):
+    tmp_n_sample = n_samples
+    final_samples = []
+    counter = 0
+    while len(final_samples) <= n_samples:
+        counter += 1
+        particle_samples = skewed_gaussian(predicted_particle_number, -0.7, tmp_n_sample * 2, sampling_density_factor=sampling_density_factor, seed=seed)  # Generate extra to choose from
+        cap_min = max(0, min_val)
         particle_samples = np.clip(particle_samples, cap_min, max_val)
         particle_samples = np.append(particle_samples, max_val)
-
         # Sort the particles
         particle_samples = sorted(particle_samples)
-
         # Ensure minimum separation
-        min_gap = (predicted_particle_number - min_val) / (tmp_n_sample-2)
+        min_gap = (predicted_particle_number - min_val) / (tmp_n_sample - 2)
         final_samples = [int(particle_samples[-1])]  # Start with max value
         last_added = particle_samples[-1]
-    
         for p in reversed(particle_samples):
             if abs(p - last_added) > min_gap and p not in final_samples:
-            	final_samples.append(int(p))
-            	last_added = p
+                final_samples.append(int(p))
+                last_added = p
             if len(final_samples) == tmp_n_sample:
-            	break
-        tmp_n_sample+=1
-
+                break
+        tmp_n_sample += 1
     return sorted(final_samples)
 
 
-def automaticParticleSubsets2(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling):
-    if not locresResultsCsvFile == "":
-    	df = pd.read_csv(locresResultsCsvFile)
-    	predicted_particle_number = predict_min_particles(locresResultsCsvFile,showPlot=False)
-    	min_val = df['numParticles'].min() * 2.0/3.0
-    	max_val = df['numParticles'].max()
-    	sampling_density_factor=0.15
-    else:
-    	predicted_particle_number = maxNumberOfParticles
-    	min_val = maxNumberOfParticles * 1.0/3.0
-    	max_val = maxNumberOfParticles
-    	sampling_density_factor=0.25
 
-    predicted_particles = generate_particle_samples(predicted_particle_number, number_of_sampling, min_val, max_val,sampling_density_factor=sampling_density_factor)
+def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling, randomSeed=True):
+    if not locresResultsCsvFile == "":
+        df = pd.read_csv(locresResultsCsvFile)
+        predicted_particle_number = predict_min_particles(locresResultsCsvFile,showPlot=False)
+        min_val = df['numParticles'].min() * 2.0/3.0
+        max_val = df['numParticles'].max()
+        sampling_density_factor=0.15
+    else:
+        predicted_particle_number = maxNumberOfParticles
+        min_val = maxNumberOfParticles * 1.0/3.0
+        max_val = maxNumberOfParticles
+        sampling_density_factor=0.25
+    if (randomSeed):
+        seed = int(time.time())
+    else:
+        seed = 0
+
+    predicted_particles = generate_particle_samples(predicted_particle_number, number_of_sampling, min_val, max_val,sampling_density_factor=sampling_density_factor, seed=seed)
     return predicted_particles
 
 
@@ -304,6 +325,8 @@ emprove_automaticParticleSubsets.add_argument("--locres", required=False, type=s
 emprove_automaticParticleSubsets.add_argument("--save", required=False, type=str, default="", help="file where to save the particle to check in a csv fashon")
 emprove_automaticParticleSubsets.add_argument("--plot", action="store_false", help="Display the plot")
 emprove_automaticParticleSubsets.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on an image file")
+emprove_automaticParticleSubsets.add_argument("--numSamples", required=False, type=int, default=10,  help="number of samples")
+#emprove_automaticParticleSubsets.add_argument("--pureRandom", action="store_true", help="pure random number, not reproducible")
 def automaticParticleSubsets(args):
     if (not os.path.isfile(args.starFile)):
         print('ERROR: file \"',args.starFile,'\" not existing')
@@ -314,25 +337,388 @@ def automaticParticleSubsets(args):
     num_non_null_items = int(starFile.count()[0])
 
     if os.path.isfile(args.locres):
-    	expectedEstimatedParticlesNumber=predict_min_particles(args.locres,showPlot=False)
-    	print("expected number of particles=",expectedEstimatedParticlesNumber)
+        expectedEstimatedParticlesNumber=predict_min_particles(args.locres,showPlot=False)
+        print("expected number of particles=",expectedEstimatedParticlesNumber)
     else:
-    	args.locres=""
-    	print ('WARNING: you might want to specify a valid locres file, however it is ok for the first iteration\n')
-    	expectedEstimatedParticlesNumber=num_non_null_items
+        args.locres=""
+        print ('WARNING: you might want to specify a valid locres file, however it is ok for the first iteration\n')
+        expectedEstimatedParticlesNumber=num_non_null_items
 
-    result=automaticParticleSubsets2(args.locres, num_non_null_items, 10)
-    print ("result automaticParticleSubsets2=",result)
-    exit(0)
+    #print ("plot on file=",args.plotOnFile)
+    result=automaticParticleSubsetsCore(args.locres, num_non_null_items, args.numSamples, randomSeed=True)
+    print ("result automaticParticleSubsetsCore=",result)
     predict_min_particles(args.locres, showPlot=False,predicted_particles=result, outputImageFile=args.plotOnFile)
     print("Particles for performing selection",result)
     if not args.save == "":
-    	directory = os.path.dirname(args.save)
-    	if directory and not os.path.exists(directory):
-    		os.makedirs(directory)
-    	with open(args.save, 'w') as f:
-    		f.write(','.join(map(str, result)))
+        directory = os.path.dirname(args.save)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory)
+        with open(args.save, 'w') as f:
+            f.write(','.join(map(str, result)))
 
+
+
+#####################################################
+######## OVERVIEW FILE
+#####################################################
+def overview_read_item_at_iteration(overview_file_path, iteration_number):
+    # Load the TOML file
+    try:
+        data = toml.load(overview_file_path)
+    except Exception as e:
+        print(f"Error reading TOML file: {e}")
+        return None
+
+    # Iterate through each section to find the matching iteration
+    for section in data:
+        if "iteration" in data[section] and data[section]["iteration"] == iteration_number:
+            return data[section].get("target_num_particles", None)
+
+    print(f"Iteration {iteration_number} not found in the file.")
+    return None
+
+
+
+def remove_duplicates_toml(file_path):
+    # Read the TOML file as plain text
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    # Process each line to remove duplicates, keeping only the last occurrence
+    new_lines = []
+    seen_keys = set()
+    for line in reversed(lines):
+        if '=' in line:
+            key = line.split('=', 1)[0].strip()
+            if key not in seen_keys:
+                seen_keys.add(key)
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+            seen_keys.clear()  # Reset for a new table
+
+    # Reverse the lines back to original order
+    new_lines = new_lines[::-1]
+
+    # Write the processed lines back to the file
+    with open(file_path, 'w') as file:
+        file.writelines(new_lines)
+
+
+
+emprove_generate_overview = command.add_parser (
+    "generate_overview", description="generate overview", help='generate overview'
+)
+emprove_generate_overview.add_argument("--directory", required=True, type=str, help="directory with the overview to be generated")
+emprove_generate_overview.add_argument("--verbose", action="store_true", help="verbose overview display")
+def generate_overview(args):
+    prefix = "_emprove_"
+    # List all entries in the directory
+    entries = os.listdir(args.directory)
+    #print ("args.directory=",args.directory)
+
+    # Filter directories that start with the prefix and end with a number
+    emprove_dirs = []
+    for entry in entries:
+        if entry.startswith(prefix) and "_" in entry:
+            parts = entry.split("_")
+            if parts[-1].isdigit():  # Check if the last part is a number
+                emprove_dirs.append(entry)
+
+    # Sort the directories based on the numeric part
+    emprove_dirs.sort(key=lambda x: int(x.split("_")[-1]))
+    #print (emprove_dirs)
+
+    fileSettings=os.path.join(args.directory,"session_settings.toml")
+    with open(fileSettings, 'r') as file:
+        dataSettings = toml.load(fileSettings)
+    sigmaInitial=round(float(dataSettings.get("sigma", 1)),2)
+    sigmaCurrent=sigmaInitial
+    minimum_sigma_allowed=float(dataSettings.get("minimum_sigma_allowed", 0.6))
+    sigma_decreasing_step=float(dataSettings.get("sigma_decreasing_step", 0.05))
+
+
+    output_log_file_string=""
+    for index, ii in enumerate(emprove_dirs):
+        if (args.verbose):
+            print (ii)
+
+        with open(os.path.join(args.directory,ii,"bestRanked_locres_values.csv"), mode='r') as file:
+            reader = csv.DictReader(file)
+            data1 = [row for row in reader]
+
+        with open(os.path.join(args.directory,ii,"target_num_of_particles.csv"), mode='r') as file:
+            reader = csv.DictReader(file)
+            data2 = [row for row in reader]
+
+        # Combine, remove duplicates, and sort
+        combined_data = {f"{row['numParticles']}_{row['mean']}": row for row in data1 + data2}.values()
+        combined_data = sorted(combined_data, key=lambda x: int(x['numParticles']))
+
+        #write combined data on a file
+        fullPrediction_locres_file = os.path.join(args.directory,ii,"fullPrediction_bestRanked_locres_values.csv")
+        headers = combined_data[0].keys() if combined_data else []
+        with open(fullPrediction_locres_file, mode='w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(combined_data)
+
+
+
+        # Find the row with the lowest mean
+        lowest_mean = float('inf')
+        lowest_mean_row = None
+        for row in combined_data:
+            if float(row['mean']) < lowest_mean:
+                lowest_mean = float(row['mean'])
+                lowest_mean_row = row
+
+        # Find the row with the largest 'numParticles'
+        largest_num_particles = 0
+        largest_num_particles_row = None  # Define the variable
+        for row in combined_data:
+            if int(row['numParticles']) > largest_num_particles:
+                largest_num_particles = int(row['numParticles'])
+                largest_num_particles_row = row  # Assign the row data
+
+        mean_of_lowest_mean = lowest_mean_row['mean']
+        numParticles_of_lowest_mean = lowest_mean_row['numParticles']
+        mean_of_largest_num_particles = largest_num_particles_row['mean']
+
+        # Convert the dictionary rows to comma-separated strings
+        lowest_mean_row_str = ','.join(map(str, lowest_mean_row.values()))
+        largest_num_particles_str = ','.join(map(str, largest_num_particles_row.values()))
+
+        # Print the results as comma-separated strings
+        if (args.verbose):
+            print("   lowest_mean_row:", lowest_mean_row_str)
+            print("   mean_of_lowest_mean:", mean_of_lowest_mean)
+            print("   largest_num_particles_row:", largest_num_particles_str)
+            print("   mean_of_largest_num_particles:", mean_of_largest_num_particles)
+            print("   numParticles_of_lowest_mean:", numParticles_of_lowest_mean)
+
+        
+        toCheckDir=os.path.join(args.directory,ii)
+        targetNumOfParticles=0
+
+
+        selection_block='tag="'+ii+'"\n'
+        selection_block+='working_directory = "'+toCheckDir+'"\n'
+        selection_block+="selection_number = "+str(int(ii.split("_")[-1]))+"\n"
+        selection_block+="reference_num_particles = "+str(numParticles_of_lowest_mean)+"\n"
+        selection_block+='reference_starFile = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'.star')+'"\n'
+        selection_block+='reference_mapA = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'_recH1.mrc')+'"\n'
+        selection_block+='reference_mapB = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'_recH2.mrc')+'"\n'
+        selection_block+='reference_locres_stats = "'+lowest_mean_row_str+'"\n'
+        selection_block+="reference_locres_mean = "+mean_of_lowest_mean+"\n"        
+        selection_block+='computed_locres_file = "'+os.path.join(args.directory,ii,'fullPrediction_bestRanked_locres_values.csv')+'"\n'
+
+        if index == 0:
+            output_log_file_string+="\n[[_emprove_selection_0]]\n"
+            output_log_file_string+='tag="'+ii+'"\n'
+            output_log_file_string+='working_directory = "'+toCheckDir+'"\n'
+            output_log_file_string+="reference_num_particles="+str(largest_num_particles)+"\n"
+            output_log_file_string+='reference_starFile = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'.star')+'"\n'
+            output_log_file_string+='reference_mapA = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'_recH1.mrc')+'"\n'
+            output_log_file_string+='reference_mapB = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'_recH2.mrc')+'"\n'
+            output_log_file_string+='reference_locres_stats = "'+largest_num_particles_str+'"\n'
+            output_log_file_string+="reference_locres_mean = "+mean_of_largest_num_particles+"\n"
+            output_log_file_string+='computed_locres_file = "'+os.path.join(args.directory,ii,'bestRanked_locres_values.csv')+'"\n'
+            output_log_file_string+="improve_previouses_locres_mean = true\n"
+            output_log_file_string+='session_settings = "'+os.path.join(args.directory,'session_settings.toml')+'"\n'
+            #output_log_file_string+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
+            #output_log_file_string+='SCI_sigma_next_selection = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
+
+
+            best_locres=mean_of_largest_num_particles
+            best_selectionBlock=selection_block
+
+        improve_previouses_locres_mean='false'
+        if mean_of_lowest_mean < best_locres:
+            best_locres=mean_of_lowest_mean
+            best_selectionBlock=selection_block
+            improve_previouses_locres_mean='true'
+        else:
+            improve_previouses_locres_mean='false'
+            #if sigmaCurrent>minimum_sigma_allowed:
+            #    sigmaCurrent=sigmaCurrent-sigma_decreasing_step
+        #best_selectionBlock+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
+
+        output_log_file_string+="\n[[_emprove_selection_"+str(int(ii.split("_")[-1]))+"]]\n"
+        output_log_file_string+=selection_block
+        #output_log_file_string+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
+        output_log_file_string+="improve_previouses_locres_mean = "+improve_previouses_locres_mean+"\n"
+        output_log_file_string+="\n"
+
+
+    #Writing to a TOML file
+    #    toml.dump(dir_data, toml_file)
+    with open(os.path.join(args.directory,'overview.txt'), 'w') as toml_file:
+        toml_file.write("#Selections overview\n\n")
+        toml_file.write("[[_emprove_target_selection]]\n")
+        toml_file.write(best_selectionBlock)
+        toml_file.write(output_log_file_string)
+    
+    remove_duplicates_toml(os.path.join(args.directory,'overview.txt'))
+    return emprove_dirs
+
+
+
+
+
+
+
+def generate_overview2(args):
+    prefix = "_emprove_"
+    # List all entries in the directory
+    entries = os.listdir(args.directory)
+    #print ("args.directory=",args.directory)
+
+    # Filter directories that start with the prefix and end with a number
+    emprove_dirs = []
+    for entry in entries:
+        if entry.startswith(prefix) and "_" in entry:
+            parts = entry.split("_")
+            if parts[-1].isdigit():  # Check if the last part is a number
+                emprove_dirs.append(entry)
+
+    # Sort the directories based on the numeric part
+    emprove_dirs.sort(key=lambda x: int(x.split("_")[-1]))
+    #print (emprove_dirs)
+
+    output_log_file_string=""
+    
+
+    for index, ii in enumerate(emprove_dirs):
+        if (args.verbose):
+            print (ii)
+        toCheckDir=os.path.join(args.directory,ii)
+        targetNumOfParticles=0
+        with open(os.path.join(args.directory,ii,"target_num_of_particles.csv"),'r') as file:
+            first_line = file.readline()
+            for word in first_line.split():
+                if word.isdigit():
+                    targetNumOfParticles=int(word)
+        #read locres values for the target and put them in a file
+        target_locres_values=" "
+        target_locres_mean = "9999"
+        global_num_particles=0
+        global_locres_values=" "
+        global_locres_mean = "9999"
+
+        with open(os.path.join(args.directory,ii,'target_locres_values.csv'), mode='r') as tmp_locres_file:
+            csv_reader = csv.reader(tmp_locres_file)
+            headers = next(csv_reader)
+            mean_index = headers.index('mean')
+            target_all_values = []
+            for values in csv_reader:
+                target_all_values.append(values)
+                target_locres_mean = values[mean_index]
+            target_locres_values = ' '.join([','.join(row) for row in target_all_values])
+        with open(os.path.join(args.directory,ii,'bestRanked_locres_values.csv'), mode='r') as tmp_locres_initial_file:
+            csv_reader = csv.reader(tmp_locres_initial_file)
+            headers = next(csv_reader)
+            mean_index = headers.index('mean')
+            num_particles_index = headers.index('numParticles')
+            max_num_particles = 0
+            max_row = None
+            best_local_resolution = 9999
+            best_local_resolution_row = None
+
+            all_values = []
+            for values in csv_reader:
+                num_particles = int(values[num_particles_index])
+                local_resolution = float(values[mean_index])
+                if num_particles > max_num_particles:
+                    max_num_particles = num_particles
+                    max_row = values
+                if local_resolution < best_local_resolution:
+                    best_local_resolution = local_resolution
+                    best_local_resolution_row = values                    
+            if max_row:
+                global_locres_mean = max_row[mean_index]
+                global_num_particles = max_row[num_particles_index]
+                global_locres_values = ','.join(max_row)
+
+
+        selection_block='tag="'+ii+'"\n'
+        selection_block+='working_directory = "'+toCheckDir+'"\n'
+        selection_block+="selection_number = "+str(int(ii.split("_")[-1]))+"\n"
+        selection_block+="reference_num_particles = "+str(targetNumOfParticles)+"\n"
+        selection_block+='reference_starFile = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(targetNumOfParticles)+'.star')+'"\n'
+        selection_block+='reference_mapA = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(targetNumOfParticles)+'_recH1.mrc')+'"\n'
+        selection_block+='reference_mapB = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(targetNumOfParticles)+'_recH2.mrc')+'"\n'
+        selection_block+='reference_locres_stats = "'+target_locres_values+'"\n'
+        selection_block+="reference_locres_mean = "+target_locres_mean+"\n"        
+        selection_block+='computed_locres_file = "'+os.path.join(args.directory,ii,'bestRanked_locres_values.csv')+'"\n'
+
+
+        if index == 0:
+            output_log_file_string+="\n[[_emprove_selection_0]]\n"
+            output_log_file_string+='tag="'+ii+'"\n'
+            output_log_file_string+='working_directory = "'+toCheckDir+'"\n'
+            output_log_file_string+="reference_num_particles="+str(global_num_particles)+"\n"
+            output_log_file_string+='reference_starFile = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(global_num_particles)+'.star')+'"\n'
+            output_log_file_string+='reference_mapA = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(global_num_particles)+'_recH1.mrc')+'"\n'
+            output_log_file_string+='reference_mapB = "'+os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(global_num_particles)+'_recH2.mrc')+'"\n'
+            output_log_file_string+='reference_locres_stats = "'+global_locres_values+'"\n'
+            output_log_file_string+="reference_locres_mean = "+global_locres_mean+"\n"
+            output_log_file_string+='computed_locres_file = "'+os.path.join(args.directory,ii,'bestRanked_locres_values.csv')+'"\n'
+            output_log_file_string+="improve_previouses_locres_mean = true\n"
+            best_locres=global_locres_mean
+            best_selectionBlock=selection_block
+
+        improve_previouses_locres_mean='false'
+        if target_locres_mean < best_locres:
+            best_locres=target_locres_mean
+            best_selectionBlock=selection_block
+            improve_previouses_locres_mean='true'
+
+
+        output_log_file_string+="\n[[_emprove_selection_"+str(int(ii.split("_")[-1]))+"]]\n"
+        output_log_file_string+=selection_block
+        output_log_file_string+="improve_previouses_locres_mean = "+improve_previouses_locres_mean+"\n"
+        output_log_file_string+="\n"
+
+
+    #Writing to a TOML file
+    #    toml.dump(dir_data, toml_file)
+    with open(os.path.join(args.directory,'overview.txt'), 'w') as toml_file:
+        toml_file.write("#Selections overview\n\n")
+        toml_file.write("[[_emprove_target_selection]]\n")
+        toml_file.write(best_selectionBlock)
+        toml_file.write(output_log_file_string)
+    return emprove_dirs
+
+
+
+emprove_getTarget = command.add_parser (
+    "getTarget", description="get the target from a specific overview file", help='get the target from a specific overview file'
+)
+emprove_getTarget.add_argument("--overviewFile", required=True, type=str, help="toml overview file to acquire target information")
+emprove_getTarget.add_argument("--particles", action="store_true", help="gets the target star file with relevant particles")
+emprove_getTarget.add_argument("--map1", action="store_true", help="gets the target map1 file")
+emprove_getTarget.add_argument("--map2", action="store_true", help="gets the target map2 file")
+emprove_getTarget.add_argument("--stats", action="store_true", help="num particles, min, quartile, mean, quartile, max")
+#emprove_getTarget.add_argument("--sigma", action="store_true", help="get the sigma for the next iteration")
+def getTarget(args):
+    data = toml.load(args.overviewFile)
+    target_selection = data["_emprove_target_selection"][0]  # Access the first element
+    if args.particles:
+        target_starfile = target_selection["reference_starFile"]
+        print(target_starfile)
+    if args.map1:
+        reference_mapA = target_selection["reference_mapA"]
+        print(reference_mapA)
+    if args.map2:
+        reference_mapB = target_selection["reference_mapB"]
+        print(reference_mapB)
+    if args.stats:
+        reference_stats = target_selection["reference_locres_stats"]
+        print(reference_stats)
+    #if args.sigma:
+    #    reference_sigma = target_selection["SCI_sigma"]
+    #    print(reference_sigma)
     
 def main(command_line=None):
     args = emprove_parser.parse_args(command_line)
@@ -342,6 +728,12 @@ def main(command_line=None):
         automaticParticleSubsets(args)
     elif args.command == "logAnalyzer" :
         logAnalyzer(args)
+    elif args.command == "plotOverview" :
+        plotOverview(args)
+    elif args.command == "generate_overview" :
+        generate_overview(args)
+    elif args.command == "getTarget" :
+        getTarget(args)
     else:
         emprove_parser.print_help()
 
