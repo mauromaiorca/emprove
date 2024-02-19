@@ -1,6 +1,6 @@
 # EMprove
 
-emprove is a program to select a subset of high quality particle from a larger subset.
+emprove is a program to designed to discriminate between high- and low-quality 2D particles, as well as to determine the likelihood of a particle belonging to a specific pre-computed 3D conformation at low resolution. The aim is to refine the particle selection process, thereby improving the resolution of the final 3D reconstruction by ensuring that only particles contributing to accurate and detailed structural information for each pose are included. 
 
 ## Simple particle selection
 Simple particle selection allows to simply rank and select a stack of particle.
