@@ -17,7 +17,7 @@ emprove_session_manager new_select_session \
             --map2 maps/J182_003_volume_map_half_B.mrc \
             --mask maps/J185_maskLocal.mrc \
             --angpix 0.8400 \
-            --numRecs 4 \ #default is 10
+            --numRecs 4 #default is 10
 ```
 it creates a directory with the given name ("J182_emprove" in the example), and a script file to run, in this case J182_emprove_run.sh
 
