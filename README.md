@@ -10,13 +10,14 @@ Cons:
 ## Create a session for iterative particle selection using SCI scoring function for selection, and script files to run
 go in the directory where you want the new project to be created and call the following command:
 ```
-emprove_session_manager new_session \
+emprove_session_manager new_select_session \
             --name J182_emprove \
             --particles J185_particlesStack.star \
             --map maps/J182_003_volume_map_half_A.mrc \
             --map2 maps/J182_003_volume_map_half_B.mrc \
             --mask maps/J185_maskLocal.mrc \
-            --angpix 0.8400
+            --angpix 0.8400 \
+            --numRecs 4 \ #default is 10
 ```
 it creates a directory with the given name ("J182_emprove" in the example), and a script file to run, in this case J182_emprove_run.sh
 
