@@ -27,7 +27,7 @@ command = emprove_parser.add_subparsers(dest="command")
 #################################
 #################################
 ## predict_min_particles
-def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predicted_particles=None, ax=None):
+def predict_min_particles(file_path="", outputImageFile="", outputSplineFile="", showPlot=True, predicted_particles=None, ax=None):
     sns.set_style("whitegrid")  # Set Seaborn's whitegrid style
     if ax is None:
         fig, ax = plt.subplots()
@@ -112,7 +112,7 @@ def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predi
         leg = ax.legend(loc='best', frameon=True)
         leg.get_frame().set_alpha(1.0)  # Non-transparent legend
 
-        ax.set_title("Optimal Particle Number Estimation")
+        ax.set_title("Mean Local Resolution per Number of Particles")
         ax.set_xlabel("Number of Particles")
         ax.set_ylabel("Mean Local Resolution Estimation Value")
 
@@ -128,6 +128,17 @@ def predict_min_particles(file_path="", outputImageFile="", showPlot=True, predi
         if showPlot:
             plt.show()
         plt.close()  # Close the plot to free memory
+
+        if outputSplineFile:
+            spline_data = pd.DataFrame({
+                'numParticles': x_smooth,
+                'estimatedMeanResolution': y_smooth
+            })
+            # Ensure the output directory exists
+            output_directory = os.path.dirname(outputSplineFile)
+            if output_directory and not os.path.exists(output_directory):
+                os.makedirs(output_directory)
+            spline_data.to_csv(outputSplineFile, index=False)   
 
         return int(predicted_particle_number) if file_path else None
     return None
@@ -208,7 +219,9 @@ emprove_getNumParticles = command.add_parser (
 )
 emprove_getNumParticles.add_argument("--locres", required=True, type=str, help="file with locres evaluation")
 emprove_getNumParticles.add_argument("--plot", action="store_true", help="Display the plot")
+emprove_getNumParticles.add_argument("--mean_res", action="store_true", help="predict the best mean local resolution")
 emprove_getNumParticles.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on file")
+emprove_getNumParticles.add_argument("--saveSplineOnCsv", required=False, default="", type=str, help="Save the plot on file")
 emprove_getNumParticles.add_argument("--save", required=False, default="", type=str, help="Save the best reconstruction particle on file")
 def getNumParticles(args):
     
@@ -220,8 +233,13 @@ def getNumParticles(args):
     #df_sorted = df.sort_values(by=['mean', 'numParticles', 'max', 'highQuartile', 'lowQuartile', 'min'], ascending=True)
     # Selecting the "numParticles" from the first row
     #result = int(df_sorted.iloc[0]['numParticles'])
-    result=predict_min_particles(args.locres, outputImageFile=args.plotOnFile, showPlot=args.plot)
+    result=predict_min_particles(args.locres, outputImageFile=args.plotOnFile, outputSplineFile=args.plotOnFile, showPlot=args.plot)
+    if (args.mean_res):
+        data = pd.read_csv(args.locres)  # Replace 'your_file.csv' with your file path
+        idx_min_mean = data['mean'].idxmin()
+        result = data.loc[idx_min_mean, 'numParticles']
     print(result)
+
     if not args.save=="":
         directory = os.path.dirname(args.save)
         if directory and not os.path.exists(directory):
@@ -270,7 +288,7 @@ def generate_particle_samples(predicted_particle_number, n_samples, min_val, max
     skew_factor=-1.5
     max_val = (max_val + 2 * predicted_particle_number) / 3.0  # Adjust max_val for skewness
 
-    while len(final_samples) < n_samples - 2:  # Adjust to leave space for the smallest and largest values
+    while len(final_samples) < n_samples - 3:  # Adjust to leave space for the smallest and largest values
         counter += 1
         particle_samples = skewed_gaussian(predicted_particle_number, skew_factor, n_samples * 3, seed=seed, sampling_density_factor=sampling_density_factor)
         particle_samples = np.clip(particle_samples, max(0, min_val), max_val)
@@ -279,20 +297,21 @@ def generate_particle_samples(predicted_particle_number, n_samples, min_val, max
         particle_samples = np.sort(particle_samples)
         last_added = float('-inf')  # Initialize with a value that is always smaller
         for p in particle_samples:
-            if len(final_samples) >= n_samples - 2 or p >= global_max_val:
+            if len(final_samples) >= n_samples - 3 or p >= global_max_val:
                 break
             if (p - last_added) >= (predicted_particle_number - min_val) / (n_samples - 1) and p not in final_samples:
                 final_samples.append(p)
                 last_added = p
 
     # Ensure to include the largest values and predicted_particle_number/2
-    final_samples = [predicted_particle_number/2] + final_samples + [global_max_val]
+    final_samples = [predicted_particle_number/2] + [predicted_particle_number]+final_samples + [global_max_val]
 
     # Convert to integers
     final_samples = [int(value) for value in final_samples]
+    final_samples = sorted(set(final_samples))
 
     # Sort final samples and ensure we only have the desired number of samples, in case of duplicates near boundaries
-    return sorted(final_samples)
+    return final_samples
 
 
 
@@ -328,7 +347,7 @@ emprove_automaticParticleSubsets = command.add_parser (
 )
 emprove_automaticParticleSubsets.add_argument("--starFile", required=True, type=str, help="file with the input star file")
 emprove_automaticParticleSubsets.add_argument("--locres", required=False, type=str, default="", help="file with the previous locres evaluation file is")
-emprove_automaticParticleSubsets.add_argument("--save", required=False, type=str, default="", help="file where to save the particle to check in a csv fashon")
+emprove_automaticParticleSubsets.add_argument("--save", required=False, type=str, default="", help="file where to save the particle to reconstruct and compute locres, stored as comma separated file (csv)")
 emprove_automaticParticleSubsets.add_argument("--plot", action="store_true", help="Display the plot")
 emprove_automaticParticleSubsets.add_argument("--plotPrediction", action="store_true", help="Display the predictions for next plot")
 emprove_automaticParticleSubsets.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on an image file")
@@ -448,13 +467,18 @@ def generate_overview(args):
     output_log_file_string=""
     for index, ii in enumerate(emprove_dirs):
         if (args.verbose):
-            print (ii)
+            print ("VERBOSE: checking directory ", os.path.join(args.directory, ii))
+        bestRanked_path = os.path.join(args.directory, ii, "bestRanked_locres_values.csv")
+        targetNum_path = os.path.join(args.directory, ii, "target_num_of_particles.csv")
+        if not os.path.exists(bestRanked_path) or not os.path.exists(targetNum_path):
+            print("WARNING: missing relevant files in the directory ",os.path.join(args.directory, ii),", ignoring it ")
+            continue
 
-        with open(os.path.join(args.directory,ii,"bestRanked_locres_values.csv"), mode='r') as file:
+        with open(bestRanked_path, mode='r') as file:
             reader = csv.DictReader(file)
             data1 = [row for row in reader]
 
-        with open(os.path.join(args.directory,ii,"target_num_of_particles.csv"), mode='r') as file:
+        with open(targetNum_path, mode='r') as file:
             reader = csv.DictReader(file)
             data2 = [row for row in reader]
 
@@ -696,6 +720,7 @@ def generate_overview2(args):
         toml_file.write(best_selectionBlock)
         toml_file.write(output_log_file_string)
     return emprove_dirs
+
 
 
 
