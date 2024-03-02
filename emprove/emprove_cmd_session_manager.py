@@ -267,7 +267,8 @@ process_iteration() {
     echo "directory=${tag}" >> ${workingDir}/${tag}/log.txt
     True=1
     False=0
-    DO_WORK_WITH_SIGNAL_SUBTRACTION=$False  # or $False
+    signalSubtractionFlag=$'''+data.get("subtractionFlag", "False")+'''
+    DO_WORK_WITH_SIGNAL_SUBTRACTION=$signalSubtractionFlag  # or $False
     local fileWithNormalization=${workingDir}/${tag}/scored_selection_${ite}.star #for regular operations\n'''
 
     if data.get("map2", "None")=="None":
@@ -278,28 +279,26 @@ process_iteration() {
     run_script_cmd += '''    if [ $DO_WORK_WITH_SIGNAL_SUBTRACTION -eq $True ]; then
     
     	echo "Working with signal subtraction"
-    	emprove_app_starProcess --i ${fileWithNormalization}  --invertTagName _backup_rlnImageName _rlnImageName --o ${workingDir}/${tag}/tmp_inverted.star
-    	local ${workingDir}/${tag}/tmp_inverted.star #for signal subtraction, replace the file with subtraction with the whole particles
+    	emprove_app_starProcess --i ${fileWithNormalization}  --invertTagName _emprove_backup_rlnImageName _rlnImageName --o ${workingDir}/${tag}/tmp_inverted.star
+    	local fileWithNormalization=${workingDir}/${tag}/tmp_inverted.star #for signal subtraction, replace the file with subtraction with the whole particles
     else
     	echo "Working without signal subtraction (regular)"
     fi
 
 
     #produce reconstruction script for selected subset of particles
-    emprove_optimizer automaticParticleSubsets --starFile ${fileWithNormalization} --locres ${previousLocresFile} --numSamples '''+data.get("numRecs", 10)+'''  --save ${workingDir}/${tag}/reconstructions_list.csv
+    emprove_optimizer automaticParticleSubsets --starFile ${fileWithNormalization} --locres ${previousLocresFile} --numSamples '''+data.get("numRecs", 10)+'''   --save ${workingDir}/${tag}/reconstructions_list.csv  
     listParticles=$(<${workingDir}/${tag}/reconstructions_list.csv)
     echo "listParticles=$listParticles" >>${workingDir}/${tag}/log.txt
     emprove_session_manager produce_reconstructions_script --i ${fileWithNormalization} --mask ${targetMask} --tagRank ${tag}_norm'''+data.get("numViews", 350)+''' --outDir ${workingDir}/${tag} --manualParticleSubsets $listParticles --scriptName script_reconstructions.sh ${maskedCropOption}
     ./${workingDir}/${tag}/script_reconstructions.sh
     ./${workingDir}/${tag}/script_reconstructions.sh
 
-        
-    #produce reconstruction script for the target
-    echo "target=$(emprove_optimizer getNumParticles --locres ${workingDir}/${tag}/bestRanked_locres_values.csv --save ${workingDir}/${tag}/target_num_of_particles.csv)" >> ${workingDir}/${tag}/log.txt
+
+    #save the target
+    emprove_optimizer getNumParticles --locres ${workingDir}/${tag}/bestRanked_locres_values.csv --save ${workingDir}/${tag}/target_num_of_particles.csv  --mean_res   --saveSplineOnCsv ${workingDir}/${tag}/spline_locres_predictions.csv
     targetNumOfParticles=$(<${workingDir}/${tag}/target_num_of_particles.csv)
-    emprove_session_manager produce_reconstructions_script --i ${fileWithNormalization} --mask ${targetMask} --tagRank ${tag}_norm'''+data.get("numViews", 350)+''' --outDir ${workingDir}/$tag --resultFilename target_locres_values.csv --manualParticleSubsets $targetNumOfParticles --scriptName targetParticlesScript.sh ${maskedCropOption}
-    listParticles=$(<${workingDir}/${tag}/targetParticlesScript.sh)
-    ./${workingDir}/${tag}/targetParticlesScript.sh
+    previousLocresFile=${workingDir}/${tag}/bestRanked_locres_values.csv
 
     emprove_optimizer generate_overview --directory ${workingDir}
     targetMap1=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map1)
@@ -362,6 +361,8 @@ emprove_new_select_session.add_argument("--randomSeed", action='store_true', hel
 emprove_new_select_session.add_argument("--mpi", required=False, default=5, type=str, help="number of mpi processes")
 emprove_new_select_session.add_argument("--numViews", required=False, default=350, type=str, help="number of euler views for ranking")
 
+emprove_new_select_session.add_argument("--particleSubtraction", action='store_true', help="the input stack is from a particle subtraction process, the star file should have a backup field with a link to the unsubtracted particles")
+
 
 #emprove_new_select_session.add_argument("--comparisonType", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
 #emprove_new_select_session.add_argument("--typeSession", required=False, default="halfmaps", type=str, help="type of selection, select from [halfmaps,singlemap,]")
@@ -380,7 +381,10 @@ def new_select_session(args):
     if not os.path.isfile(args.mask):
         print("mask file ", args.mask, "not valid")
 
-
+    if (args.particleSubtraction):
+        particleSubtractionFlag='True'
+    else:
+        particleSubtractionFlag='False'
 
     # Create the settings file if it doesn't exist
     #if not os.path.isfile(settings_file_path):
@@ -416,7 +420,8 @@ def new_select_session(args):
             file.write(f'mpi = "{args.mpi}"\n')
             file.write("\n# num of eulerian views\n")
             file.write(f'numViews = "{args.numViews}"\n')
-
+            file.write("\n# working with particle subtraction:\n")
+            file.write(f'subtractionFlag= "{particleSubtractionFlag}"\n')
 
 
     # Check if the --map2 argument was provided
@@ -522,6 +527,8 @@ def random_selection_session(args):
             file.write(f'mask= "{args.mask}"\n')
             file.write("\n# number of particles to reconstruct:\n")
             file.write(f'splits= "{interval_values_string}"\n')
+
+
     generate_random_run_script(str(settings_file_path))
 
 
