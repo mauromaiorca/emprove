@@ -745,6 +745,43 @@ def scores_to_csv(args):
 
 
 
+
+emprove_signal_subtraction_stack = command.add_parser (
+    "signal_subtraction_stack", description="signal_subtraction_stack", help='signal_subtraction_stack'
+)
+emprove_signal_subtraction_stack.add_argument("--star", required=True, type=str, help="star file")
+emprove_signal_subtraction_stack.add_argument("--i", required=True, type=str, help="reconstructed map (or fist half map if --i2 is provided)")
+emprove_signal_subtraction_stack.add_argument("--i2", required=False, default="None", type=str, help="reconstructed second half maps")
+emprove_signal_subtraction_stack.add_argument("--mask", required=False, type=str, help="mrc star file")
+emprove_signal_subtraction_stack.add_argument("--o", required=True, type=str, help="output basename")
+#emprove_signal_subtraction_stack.add_argument("--angpix", required=True, type=float, help="angpix")
+
+def signal_subtraction_stack(args):
+    #multiply mask by maps here
+    utils.create_signal_subtraction_stack(args.star, args.i, args.i, args.mask, args.o, saveOriginal=False)
+
+
+
+emprove_ctf_corrected_stack = command.add_parser (
+    "ctf_correct_stack", description="ctf_correct_stack", help='ctf_correct_stack'
+)
+emprove_ctf_corrected_stack.add_argument("--i", required=True, type=str, help="input star file")
+emprove_ctf_corrected_stack.add_argument("--map", required=True, type=str, help="reconstructed map (or fist half map if --i2 is provided)")
+emprove_ctf_corrected_stack.add_argument("--map2", required=False, default="", type=str, help="reconstructed map (or fist half map if --i2 is provided)")
+emprove_ctf_corrected_stack.add_argument("--mask", required=False, type=str, help="mrc star file")
+emprove_ctf_corrected_stack.add_argument("--o", required=True, type=str, help="output basename")
+#emprove_ctf_corrected_stack.add_argument("--angpix", required=True, type=float, help="angpix")
+
+def ctf_correct_stack(args):
+    #multiply mask by maps here
+    if args.map2 == "":
+        args.map2=args.map
+    utils.create_CTF_reprojectionCorrected_stack(args.i, args.map, args.map2, args.mask, args.o, saveOriginal=False)
+
+
+
+
+
 #################################
 emprove_extract_particles_from_label_value = command.add_parser (
     "extract_particles_from_label_value", description="extract_particles_from_label_value", help='extract_particles_from_label_value'
@@ -771,6 +808,10 @@ def main(command_line=None):
         rotation_average_stack(args)
     elif args.command == "equalize_images":
         equalize_images(args)
+    elif args.command == "signal_subtraction_stack":
+        signal_subtraction_stack(args)
+    elif args.command == "ctf_correct_stack":
+        ctf_correct_stack(args)
     elif args.command == "scores_to_csv":
         scores_to_csv(args)
     elif args.command == "extract_particles_from_label_value":
