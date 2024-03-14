@@ -271,13 +271,12 @@ process_iteration() {
     DO_WORK_WITH_SIGNAL_SUBTRACTION=$signalSubtractionFlag  # or $False
     local fileWithNormalization=${workingDir}/${tag}/scored_selection_${ite}.star #for regular operations\n'''
 
-    if data.get("map2", "None")=="None":
-        run_script_cmd += '    emprove scoreParticles --i $targetStar --map $targetMap1  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
+    if data.get("singleMapReferenceFlag", "True")=="True":
+        run_script_cmd += '    emprove scoreParticles --i $targetStar --map $singleReferenceFile  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
     else:
-        run_script_cmd += '    emprove scoreParticles --i $targetStar --map $targetMap1  --map $targetMap2  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
+        run_script_cmd += '    emprove scoreParticles --i $targetStar --map $targetMap1  --map2 $targetMap2  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
 
     run_script_cmd += '''    if [ $DO_WORK_WITH_SIGNAL_SUBTRACTION -eq $True ]; then
-    
     	echo "Working with signal subtraction"
     	emprove_app_starProcess --i ${fileWithNormalization}  --invertTagName _emprove_backup_rlnImageName _rlnImageName --o ${workingDir}/${tag}/tmp_inverted.star
     	local fileWithNormalization=${workingDir}/${tag}/tmp_inverted.star #for signal subtraction, replace the file with subtraction with the whole particles
@@ -303,6 +302,18 @@ process_iteration() {
     emprove_optimizer generate_overview --directory ${workingDir}
     targetMap1=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map1)
     targetMap2=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map2)
+'''
+
+    if data.get("singleMapReferenceFlag", "True")=="True":
+        run_script_cmd += "    local singleReferenceFileBasename=${workingDir}/${tag}/norm_${tag}\n"
+        if data.get("postprocess", "avg")=="autobfac":
+            run_script_cmd += '    relion_postprocess --i $targetMap1 --i2 $targetMap2  --locres --o ${singleReferenceFileBasename} \n'
+            run_script_cmd += '    singleReferenceFile=${singleReferenceFileBasename}_locres.mrc \n'
+        else:
+            run_script_cmd += '    clip average $targetMap1  $targetMap2 ${singleReferenceFileBasename}.mrc \n'
+            run_script_cmd += '    singleReferenceFile=${singleReferenceFileBasename}.mrc \n'
+
+    run_script_cmd += '''
     #targetStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)
     #sigma=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --sigma)
 
@@ -313,6 +324,8 @@ process_iteration() {
     run_script_cmd += 'targetStar="'+data.get("particles", "None")+'"\n'
     run_script_cmd += 'targetMap1="'+data.get("map", "None")+'"\n'
     run_script_cmd += 'targetMap2="'+data.get("map2", "None")+'"\n'
+    if data.get("singleMapReferenceFlag", "True")=="True":
+            run_script_cmd += 'singleReferenceFile="'+data.get("map", "None")+'"\n'
     run_script_cmd += 'targetMask="'+data.get("mask", "None")+'"\n'
     run_script_cmd += 'previousLocresFile=None\n'
     run_script_cmd += '#previousLocresFile="'+data.get("session_name")+'/bestRanked_locres_values.csv"\n'
@@ -346,8 +359,9 @@ emprove_new_select_session = command.add_parser (
 )
 emprove_new_select_session.add_argument("--name", required=True, type=str, help="name of the new session, it creates a dir with that name, and a toml file in that directory with that name")
 emprove_new_select_session.add_argument("--particles", required=True, type=str, help="star file with list of particles")
-emprove_new_select_session.add_argument("--map", required=True, type=str, help="reference map, can be first half map if map2 is insterted")
-emprove_new_select_session.add_argument("--map2", required=False, type=str, help="second half maps")
+emprove_new_select_session.add_argument("--map", required=True, type=str, help="first reference, first half map or full map")
+emprove_new_select_session.add_argument("--map2", required=False, type=str, help="second half map")
+emprove_new_select_session.add_argument("--postprocessing", required=False, default="avg", type=str, help="choose between: [ avg | autobfac ]")
 emprove_new_select_session.add_argument("--mask", required=True, type=str, help="mask for the region")
 emprove_new_select_session.add_argument("--angpix", required=False, type=str, help="pixel spacing in Ansgtrom, if not given it is inferred from the map")
 emprove_new_select_session.add_argument("--sigma", required=False, type=float, default=1.0, help="sigma used for the SCI score")
@@ -369,6 +383,30 @@ emprove_new_select_session.add_argument("--particleSubtraction", action='store_t
 
 
 def new_select_session(args):
+
+    haveReferenceHalfMaps=False
+    fullMapReference="None"
+    if os.path.isfile(args.map):
+        if args.map2:
+            if os.path.isfile(args.map2):
+                haveReferenceHalfMaps=True
+    if haveReferenceHalfMaps:
+        if not os.path.isfile(args.map2):
+            print("ERROR: second half-map defined byt does not exist, exiting")
+            exit(0)
+
+    haveReferenceFullMap=False
+    if os.path.isfile(args.map) and not args.map2:
+        haveReferenceFullMap=True
+        fullMapReference=args.map
+
+    if not haveReferenceFullMap and not haveReferenceHalfMaps:
+        print("ERROR: you have define valid reference maps")
+        exit(0)
+    singleMapReferenceFlag=haveReferenceFullMap
+
+
+
     # Create the directory if it doesn't exist
     if not os.path.exists(args.name):
         os.makedirs(args.name)
@@ -386,6 +424,12 @@ def new_select_session(args):
     else:
         particleSubtractionFlag='False'
 
+    if args.postprocessing not in ["avg", "autobfac"]:
+        args.postprocessing = "avg"
+
+
+
+
     # Create the settings file if it doesn't exist
     #if not os.path.isfile(settings_file_path):
     with open(settings_file_path, 'w') as file:
@@ -401,9 +445,12 @@ def new_select_session(args):
             file.write(f'apix = "{args.angpix}"\n')
             file.write("\n# Path of the mask file\n")
             file.write(f'mask= "{args.mask}"\n')
-            file.write("\n# maps. If only one map it is given, emprove uses only this map, but this will break the assumption of independency for the two half maps, and ab-initio angular assignment might be required.\n")
+            file.write("\n# maps. If only one map it is given, emprove uses only this map, but this will break the assumption of independency for the two half maps, angular re-assignment might be required.\n")
             file.write(f'map = "{args.map}"\n')
             file.write(f'map2 = "{args.map2}"\n')
+            file.write(f'fullMap = "{fullMapReference}"\n')
+            file.write(f'postprocess = "{args.postprocessing}"\n')
+            file.write(f'singleMapReferenceFlag= "{singleMapReferenceFlag}"\n')
             file.write("\n# sigma used for the SCI score\n")
             file.write(f'sigma = "{args.sigma}"\n')
             file.write("\n# minimum sigma allowed (advanced option for optimization purposes, suggested to leave as it is)\n")
