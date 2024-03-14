@@ -107,9 +107,11 @@ def transformCtfImage(I,nx,ny,angpix,Voltage,DefocusU, DefocusV, DefocusAngle, S
 
 
 
+
+
 def scoreBlockParticles_original (particleIdxStart, particleIdxEnd, listScoresTags, mapI, maskI, sizeMap, angpix, pandasStarHeader, subsetCtfParameters, procnum, return_dict):
 #      print ('ecchimi:')
-#      print (subsetCtfParameters)
+      print ("scoreBlockParticles_original")
 #      print ('ecchimi detail:')
       tmpScore=np.zeros([int(particleIdxEnd)-int(particleIdxStart),len(listScoresTags)+1])
       #print ('idx=',particleIdxStart, ' ', particleIdxEnd)
@@ -192,8 +194,14 @@ def scoreBlockParticles_original (particleIdxStart, particleIdxEnd, listScoresTa
                 scorePSNR=emprove_core.MaskedImageComparison(RI, I, MI, sizeMap[0], sizeMap[1], 1,comparisonMethod,preprocessingMethod,sigmaBlur)
                 tmpScore[counter][kk+1]=(scorePSNR)
             elif comparisonMethod=="SCI":
+
+                #ctf_function=emprove_core.CtfCenteredImage(sizeMap[0],sizeMap[1],angpix,SphericalAberration,Voltage,DefocusAngle,DefocusU,DefocusV,AmplitudeContrast,CtfBfactor,PhaseShift)
+                #RI=np.array(RI)*np.abs(ctf_function)
+                RI=np.reshape(RI,[sizeMap[1],sizeMap[0]])
+
+
                 I_fft=np.fft.fftn(np.reshape(I,[sizeMap[1],sizeMap[0]]))
-                RI_fft=np.fft.fftn(np.reshape(RI,[sizeMap[1],sizeMap[0]]))
+                RI_fft=np.fft.fftn(RI)
                 I_abs_fft=np.abs(I_fft)+0.0000001
                 RI_abs_fft=np.abs(RI_fft)+0.0000001
                 ampAvg=0.5*(I_abs_fft+RI_abs_fft)
@@ -212,7 +220,7 @@ def scoreBlockParticles_original (particleIdxStart, particleIdxEnd, listScoresTa
 
 def scoreBlockParticles_halfMaps (particleIdxStart, particleIdxEnd, listScoresTags, mapI_A, mapI_B,  maskI, sizeMap, angpix, pandasStarHeader, subsetCtfParameters, procnum, return_dict):
 #      print ('ecchimi:')
-#      print (subsetCtfParameters)
+      print ("scoreBlockParticles_halfMaps")
 #      print ('ecchimi detail:')
       tmpScore=np.zeros([int(particleIdxEnd)-int(particleIdxStart),len(listScoresTags)+1])
       #print ('idx=',particleIdxStart, ' ', particleIdxEnd)
@@ -302,6 +310,12 @@ def scoreBlockParticles_halfMaps (particleIdxStart, particleIdxEnd, listScoresTa
                 scorePSNR=emprove_core.MaskedImageComparison(RI, I, MI, sizeMap[0], sizeMap[1], 1,comparisonMethod,preprocessingMethod,sigmaBlur)
                 tmpScore[counter][kk+1]=(scorePSNR)
             elif comparisonMethod=="SCI":
+
+                #ctf_function=emprove_core.CtfCenteredImage(sizeMap[0],sizeMap[1],angpix,SphericalAberration,Voltage,DefocusAngle,DefocusU,DefocusV,AmplitudeContrast,CtfBfactor,PhaseShift)
+                #RI=np.array(RI)*np.abs(ctf_function)
+                RI=np.reshape(RI,[sizeMap[1],sizeMap[0]])
+
+
                 I_fft=np.fft.fftn(np.reshape(I,[sizeMap[1],sizeMap[0]]))
                 RI_fft=np.fft.fftn(np.reshape(RI,[sizeMap[1],sizeMap[0]]))
                 I_abs_fft=np.abs(I_fft)+0.0000001
