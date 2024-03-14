@@ -12,6 +12,7 @@ import seaborn as sns
 import toml
 import csv
 import time
+import shutil
 
 emprove_parser = argparse.ArgumentParser(
     prog="emprove_optimizer",
@@ -465,6 +466,7 @@ def generate_overview(args):
 
 
     output_log_file_string=""
+    lastSelectionsNoImprovements=0
     for index, ii in enumerate(emprove_dirs):
         if (args.verbose):
             print ("VERBOSE: checking directory ", os.path.join(args.directory, ii))
@@ -559,27 +561,51 @@ def generate_overview(args):
             output_log_file_string+='session_settings = "'+os.path.join(args.directory,'session_settings.toml')+'"\n'
             #output_log_file_string+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
             #output_log_file_string+='SCI_sigma_next_selection = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
-
-
+            target_reference_starFile = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'.star')
+            target_reference_mapA = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'_recH1.mrc')
+            target_reference_mapB = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(largest_num_particles)+'_recH2.mrc')
             best_locres=mean_of_largest_num_particles
             best_selectionBlock=selection_block
+            best_selectionBlock_size=largest_num_particles
 
         improve_previouses_locres_mean='false'
         if mean_of_lowest_mean < best_locres:
             best_locres=mean_of_lowest_mean
             best_selectionBlock=selection_block
+            best_selectionBlock_size=numParticles_of_lowest_mean
             improve_previouses_locres_mean='true'
+            target_reference_starFile = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'.star')
+            target_reference_mapA = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'_recH1.mrc')
+            target_reference_mapB = os.path.join(args.directory,ii,'norm_'+ii+'_best'+str(numParticles_of_lowest_mean)+'_recH2.mrc')
+            lastSelectionsNoImprovements=0
         else:
             improve_previouses_locres_mean='false'
+            lastSelectionsNoImprovements+=1
             #if sigmaCurrent>minimum_sigma_allowed:
             #    sigmaCurrent=sigmaCurrent-sigma_decreasing_step
         #best_selectionBlock+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
+
 
         output_log_file_string+="\n[[_emprove_selection_"+str(int(ii.split("_")[-1]))+"]]\n"
         output_log_file_string+=selection_block
         #output_log_file_string+='SCI_sigma = "'+"{:.2f}".format(sigmaCurrent)+'"\n'
         output_log_file_string+="improve_previouses_locres_mean = "+improve_previouses_locres_mean+"\n"
+
         output_log_file_string+="\n"
+
+    #shutil.copy(target_reference_starFile, os.path.join(args.directory))
+    #shutil.copy(target_reference_mapA, os.path.join(args.directory))
+    #shutil.copy(target_reference_mapB, os.path.join(args.directory))
+
+
+   shutil.copy(target_reference_starFile, os.path.join(args.directory,'reference_subset.star'))
+   shutil.copy(target_reference_mapA, os.path.join(args.directory,'reference_subset_mapA.mrc'))
+   shutil.copy(target_reference_mapB, os.path.join(args.directory,'reference_subset_mapB.mrc'))
+
+    percentage_particles_retained = 0
+    if largest_num_particles > 0:
+        percentage_particles_retained = (float(best_selectionBlock_size)/float(largest_num_particles))*100
+
 
 
     #Writing to a TOML file
@@ -588,6 +614,8 @@ def generate_overview(args):
         toml_file.write("#Selections overview\n\n")
         toml_file.write("[[_emprove_target_selection]]\n")
         toml_file.write(best_selectionBlock)
+        toml_file.write("last_consecutive_non_improving_selections= "+str(lastSelectionsNoImprovements)+"\n")
+        toml_file.write("percentage_particles_retained = "+"{:.2f}".format(float(percentage_particles_retained))+"\n")
         toml_file.write(output_log_file_string)
     
     remove_duplicates_toml(os.path.join(args.directory,'overview.txt'))
@@ -704,6 +732,7 @@ def generate_overview2(args):
             best_locres=target_locres_mean
             best_selectionBlock=selection_block
             improve_previouses_locres_mean='true'
+
 
 
         output_log_file_string+="\n[[_emprove_selection_"+str(int(ii.split("_")[-1]))+"]]\n"
