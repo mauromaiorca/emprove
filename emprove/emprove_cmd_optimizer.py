@@ -598,9 +598,9 @@ def generate_overview(args):
     #shutil.copy(target_reference_mapB, os.path.join(args.directory))
 
 
-   shutil.copy(target_reference_starFile, os.path.join(args.directory,'reference_subset.star'))
-   shutil.copy(target_reference_mapA, os.path.join(args.directory,'reference_subset_mapA.mrc'))
-   shutil.copy(target_reference_mapB, os.path.join(args.directory,'reference_subset_mapB.mrc'))
+    shutil.copy(target_reference_starFile, os.path.join(args.directory,'reference_subset.star'))
+    shutil.copy(target_reference_mapA, os.path.join(args.directory,'reference_subset_mapA.mrc'))
+    shutil.copy(target_reference_mapB, os.path.join(args.directory,'reference_subset_mapB.mrc'))
 
     percentage_particles_retained = 0
     if largest_num_particles > 0:
