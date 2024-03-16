@@ -307,8 +307,8 @@ process_iteration() {
     if data.get("singleMapReferenceFlag", "True")=="True":
         run_script_cmd += "    local singleReferenceFileBasename=${workingDir}/${tag}/norm_${tag}\n"
         if data.get("postprocess", "avg")=="autobfac":
-            run_script_cmd += '    relion_postprocess --i $targetMap1 --i2 $targetMap2  --locres --o ${singleReferenceFileBasename} \n'
-            run_script_cmd += '    singleReferenceFile=${singleReferenceFileBasename}_locres.mrc \n'
+            run_script_cmd += '    relion_postprocess --i $targetMap1 --i2 $targetMap2  --auto_bfac --o ${singleReferenceFileBasename}_autobfac \n'
+            run_script_cmd += '    singleReferenceFile=${singleReferenceFileBasename}_autobfac.mrc \n'
         else:
             run_script_cmd += '    clip average $targetMap1  $targetMap2 ${singleReferenceFileBasename}.mrc \n'
             run_script_cmd += '    singleReferenceFile=${singleReferenceFileBasename}.mrc \n'
