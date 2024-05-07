@@ -286,7 +286,7 @@ process_iteration() {
 
 
     #produce reconstruction script for selected subset of particles
-    emprove_optimizer automaticParticleSubsets --starFile ${fileWithNormalization} --locres ${previousLocresFile} --numSamples '''+data.get("numRecs", 10)+'''   --save ${workingDir}/${tag}/reconstructions_list.csv  
+    emprove_optimizer automaticParticleSubsets --starFile ${fileWithNormalization} --locres ${previousLocresFile} --numSamples '''+data.get("numRecs", 10)+''' --samplingDensityFactor '''+data.get("samplingDensityFactor", 0.25)+'''  --extraSamples_num  '''+data.get("extraSamples_num", 1)+'''  --extraSamples_randomness   '''+data.get("extraSamples_randomness", 1)+'''  --extraSamples_audacity   '''+data.get("extraSamples_audacity", 1)+'''    --save ${workingDir}/${tag}/reconstructions_list.csv  
     listParticles=$(<${workingDir}/${tag}/reconstructions_list.csv)
     echo "listParticles=$listParticles" >>${workingDir}/${tag}/log.txt
     emprove_session_manager produce_reconstructions_script --i ${fileWithNormalization} --mask ${targetMask} --tagRank ${tag}_norm'''+data.get("numViews", 350)+''' --outDir ${workingDir}/${tag} --manualParticleSubsets $listParticles --scriptName script_reconstructions.sh ${maskedCropOption}
@@ -369,6 +369,12 @@ emprove_new_select_session.add_argument("--CC", action='store_true', help="use C
 emprove_new_select_session.add_argument("--maskingCrop", action='store_true', help="in the sake of speed, cropping the file according to mask for computing locres")
 emprove_new_select_session.add_argument("--maxSelections", required=False, default=8, type=int, help="Max number of selections (by default 8 selections)")
 emprove_new_select_session.add_argument("--numRecs", required=False, default=10, type=int, help="num Samplin gReconstructions. Number of reconstructions for each selections. More reconstruction, more precise is the selection")
+emprove_new_select_session.add_argument("--samplingDensityFactor", required=False, type=float , default=0.25,  help="sampling density factor for reconstructions: default =0.25, higher density factor for a wider distribution")
+emprove_new_select_session.add_argument("--extraSamples_num", required=False, type=int, default=1,  help="number of extra reconstructions samples for more correct optimization (to reduce the local minima trap)")
+emprove_new_select_session.add_argument("--extraSamples_randomness", required=False, type=float, default=0.1,  help="number of extra reconstructions samples randomness, between 0 and 1: default 0.1, max=1")
+emprove_new_select_session.add_argument("--extraSamples_audacity", required=False, type=float, default=0.5,  help="audacity of extra reconstructions samples, between 0 and 1: default 0.5, very audacious=1")
+
+
 emprove_new_select_session.add_argument("--randomSeed", action='store_true', help="Same random sequence at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
 #emprove_new_select_session.add_argument("--signalSubtraction", action='store_false', help="workWithSignalSubtraction")
 #emprove_new_select_session.add_argument("--randomSeed", required=False, default=8, type=int, help="Same random sequene at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
@@ -463,6 +469,10 @@ def new_select_session(args):
             file.write(f'maxSelections = "{args.maxSelections}"\n')
             file.write("\n# numRecs, Number of reconstructions for each selections. More reconstruction, more precise is the selection\n")
             file.write(f'numRecs = "{args.numRecs}"\n')
+            file.write(f'samplingDensityFactor = "{args.samplingDensityFactor}"\n')
+            file.write(f'extraSamples_num = "{args.extraSamples_num}"\n')
+            file.write(f'extraSamples_randomness = "{args.extraSamples_randomness}"\n')
+            file.write(f'extraSamples_audacity = "{args.extraSamples_audacity}"\n')
             file.write("\n# num of mpi processes\n")
             file.write(f'mpi = "{args.mpi}"\n')
             file.write("\n# num of eulerian views\n")
