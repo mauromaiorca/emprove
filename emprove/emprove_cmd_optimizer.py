@@ -13,6 +13,8 @@ import toml
 import csv
 import time
 import shutil
+import emprove_core
+from emprove import starHandler
 
 emprove_parser = argparse.ArgumentParser(
     prog="emprove_optimizer",
@@ -282,15 +284,18 @@ def skewed_gaussian(mean, skew_factor, size, seed=0, sampling_density_factor=0.1
     values = mean + skew_factor * (values - mean)
     return values
 
-def generate_particle_samples(predicted_particle_number, n_samples, min_val, max_val, sampling_density_factor=0.15, seed=0):
+def generate_particle_samples(predicted_particle_number, n_samples, min_val, max_val, sampling_density_factor=0.25, extraSamples_num=1, extraSamples_randomness=0.1, extraSamples_audacity=0.5, seed=0):
     final_samples = []
-    counter = 0
     global_max_val = max_val
     skew_factor=-1.5
     max_val = (max_val + 2 * predicted_particle_number) / 3.0  # Adjust max_val for skewness
 
-    while len(final_samples) < n_samples - 3:  # Adjust to leave space for the smallest and largest values
-        counter += 1
+    max_attempts = 2000  # Maximum number of attempts to avoid infinite loop
+    attempts = 0  # Current attempt count
+
+
+    while len(final_samples) < n_samples - 3 and attempts < max_attempts:  # Adjust to leave space for the smallest and largest values
+        attempts += 1
         particle_samples = skewed_gaussian(predicted_particle_number, skew_factor, n_samples * 3, seed=seed, sampling_density_factor=sampling_density_factor)
         particle_samples = np.clip(particle_samples, max(0, min_val), max_val)
 
@@ -304,8 +309,19 @@ def generate_particle_samples(predicted_particle_number, n_samples, min_val, max
                 final_samples.append(p)
                 last_added = p
 
-    # Ensure to include the largest values and predicted_particle_number/2
-    final_samples = [predicted_particle_number/2] + [predicted_particle_number]+final_samples + [global_max_val]
+    # Generate and prepend extra samples with randomness
+    extra_samples = []
+    for i in range(extraSamples_num):
+        lower_bound = predicted_particle_number / (2 + i + 1)
+        upper_bound = predicted_particle_number / (2 + i - 1)
+        # Calculate the range width based on extraSamples_randomness
+        range_width = (upper_bound - lower_bound) * extraSamples_randomness
+        # Adjust the midpoint based on extraSamples_randomness
+        midpoint = (upper_bound + lower_bound) / 2
+        # Generate a random sample within the adjusted range
+        random_sample = np.random.uniform(midpoint - range_width / 2, midpoint + range_width / 2)
+        extra_samples.append(random_sample)
+    final_samples = extra_samples + [predicted_particle_number] + final_samples + [global_max_val]
 
     # Convert to integers
     final_samples = [int(value) for value in final_samples]
@@ -316,25 +332,25 @@ def generate_particle_samples(predicted_particle_number, n_samples, min_val, max
 
 
 
-def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling, randomSeed=True, showPlot=False, outputImageFile=""):
+def automaticParticleSubsetsCore(locresResultsCsvFile, maxNumberOfParticles, number_of_sampling, randomSeed=True, showPlot=False, outputImageFile="", sampling_density_factor=0.25, extraSamples_num=1, extraSamples_randomness=0.1, extraSamples_audacity=0.5):
     if not locresResultsCsvFile == "":
         df = pd.read_csv(locresResultsCsvFile)
         predicted_particle_number = predict_min_particles(locresResultsCsvFile,  showPlot=showPlot, outputImageFile=outputImageFile)
         print("predicted_particle_number = ", predicted_particle_number )
         min_val = df['numParticles'].min() * 2.0/3.0
         max_val = df['numParticles'].max()
-        sampling_density_factor=0.25
+        #sampling_density_factor=0.25
     else:
         predicted_particle_number = maxNumberOfParticles
         min_val = maxNumberOfParticles * 1.0/3.0
         max_val = maxNumberOfParticles
-        sampling_density_factor=0.25
+        #sampling_density_factor=0.25
     if (randomSeed):
         seed = int(time.time())
     else:
         seed = 0
      
-    predicted_particles = generate_particle_samples(predicted_particle_number, number_of_sampling, min_val, max_val,sampling_density_factor=sampling_density_factor, seed=seed)
+    predicted_particles = generate_particle_samples(predicted_particle_number, number_of_sampling, min_val, max_val,sampling_density_factor=sampling_density_factor, extraSamples_num=extraSamples_num, extraSamples_randomness=extraSamples_audacity, extraSamples_audacity=extraSamples_audacity, seed=seed)
     return predicted_particles
 
 
@@ -353,6 +369,14 @@ emprove_automaticParticleSubsets.add_argument("--plot", action="store_true", hel
 emprove_automaticParticleSubsets.add_argument("--plotPrediction", action="store_true", help="Display the predictions for next plot")
 emprove_automaticParticleSubsets.add_argument("--plotOnFile", required=False, default="", type=str, help="Save the plot on an image file")
 emprove_automaticParticleSubsets.add_argument("--numSamples", required=False, type=int, default=10,  help="number of samples")
+emprove_automaticParticleSubsets.add_argument("--samplingDensityFactor", required=False, type=float , default=0.15,  help="sampling density factor: default =0.25, higher density factor for a wider distribution")
+emprove_automaticParticleSubsets.add_argument("--extraSamples_num", required=False, type=int, default=1,  help="number of extra samples for more correct optimization (to reduce the local minima trap)")
+emprove_automaticParticleSubsets.add_argument("--extraSamples_randomness", required=False, type=float, default=0.1,  help="number of extra samples randomness, between 0 and 1: default 0.1, max=1")
+emprove_automaticParticleSubsets.add_argument("--extraSamples_audacity", required=False, type=float, default=0.5,  help="audacity of extra samples, between 0 and 1: default 0.5, very audacious=1")
+
+
+
+
 #emprove_automaticParticleSubsets.add_argument("--pureRandom", action="store_true", help="pure random number, not reproducible")
 def automaticParticleSubsets(args):
     if (not os.path.isfile(args.starFile)):
@@ -371,8 +395,12 @@ def automaticParticleSubsets(args):
         print ('WARNING: you might want to specify a valid locres file, however it is ok for the first iteration\n')
         expectedEstimatedParticlesNumber=num_non_null_items
 
+
+
+
+
     #print ("plot on file=",args.plotOnFile)
-    result=automaticParticleSubsetsCore(args.locres, num_non_null_items, args.numSamples, showPlot=args.plot, outputImageFile=args.plotOnFile)
+    result=automaticParticleSubsetsCore(args.locres, num_non_null_items, args.numSamples, showPlot=args.plot, outputImageFile=args.plotOnFile, sampling_density_factor=args.samplingDensityFactor, extraSamples_num=args.extraSamples_num, extraSamples_randomness=args.extraSamples_randomness)
     print ("result automaticParticleSubsetsCore=",result)
 #    predict_min_particles(args.locres, showPlot=args.plot, predicted_particles=result, outputImageFile=args.plotOnFile)
 #    print("Particles for performing selection",result)
@@ -601,6 +629,18 @@ def generate_overview(args):
     shutil.copy(target_reference_starFile, os.path.join(args.directory,'reference_subset.star'))
     shutil.copy(target_reference_mapA, os.path.join(args.directory,'reference_subset_mapA.mrc'))
     shutil.copy(target_reference_mapB, os.path.join(args.directory,'reference_subset_mapB.mrc'))
+    starHandler.removeColumnsTagsStartingWith(os.path.join(args.directory,'reference_subset.star'), os.path.join(args.directory,'reference_subset_clean.star'), '_emprove')
+
+    #average two halfmaps
+    sizeMap = emprove_core.sizeMRC(target_reference_mapA)
+    map1 = np.array(emprove_core.ReadMRC(target_reference_mapA))
+    map2 = np.array(emprove_core.ReadMRC(target_reference_mapB))
+    map12 = (map1+map2) / 2
+    spacingMRC = round(emprove_core.spacingMRC(target_reference_mapA),4)
+    emprove_core.WriteMRC(map12.flatten().tolist(), os.path.join(args.directory,'reference_subset_map.mrc'), sizeMap[2], sizeMap[1], sizeMap[0], spacingMRC)
+    emprove_core.replaceMrcHeader(target_reference_mapA,os.path.join(args.directory,'reference_subset_map.mrc'))
+
+
 
     percentage_particles_retained = 0
     if largest_num_particles > 0:
