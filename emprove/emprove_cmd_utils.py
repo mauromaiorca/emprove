@@ -697,6 +697,9 @@ def equalize_images(args):
         output_filename = os.path.join(args.dir, output_filename)
         emprove_core.WriteMRC(modified_map.flatten().tolist(), output_filename, nx, ny, nz, spacingMRC)
 
+
+
+
 #################################
 ## scores_to_csv 
 def retrieveScoringTag(columnList):
@@ -762,21 +765,47 @@ def signal_subtraction_stack(args):
 
 
 
-emprove_ctf_corrected_stack = command.add_parser (
-    "ctf_correct_stack", description="ctf_correct_stack", help='ctf_correct_stack'
-)
-emprove_ctf_corrected_stack.add_argument("--i", required=True, type=str, help="input star file")
-emprove_ctf_corrected_stack.add_argument("--map", required=True, type=str, help="reconstructed map (or fist half map if --i2 is provided)")
-emprove_ctf_corrected_stack.add_argument("--map2", required=False, default="", type=str, help="reconstructed map (or fist half map if --i2 is provided)")
-emprove_ctf_corrected_stack.add_argument("--mask", required=False, type=str, help="mrc star file")
-emprove_ctf_corrected_stack.add_argument("--o", required=True, type=str, help="output basename")
-#emprove_ctf_corrected_stack.add_argument("--angpix", required=True, type=float, help="angpix")
 
-def ctf_correct_stack(args):
+
+
+
+emprove_signal_subtraction_stack = command.add_parser (
+    "signal_subtraction_stack", description="signal_subtraction_stack", help='signal_subtraction_stack'
+)
+emprove_signal_subtraction_stack.add_argument("--star", required=True, type=str, help="star file")
+emprove_signal_subtraction_stack.add_argument("--i", required=True, type=str, help="reconstructed map (or fist half map if --i2 is provided)")
+emprove_signal_subtraction_stack.add_argument("--i2", required=False, default="None", type=str, help="reconstructed second half maps")
+emprove_signal_subtraction_stack.add_argument("--mask", required=False, type=str, help="mrc star file")
+emprove_signal_subtraction_stack.add_argument("--o", required=True, type=str, help="output basename")
+#emprove_signal_subtraction_stack.add_argument("--angpix", required=True, type=float, help="angpix")
+
+def signal_subtraction_stack(args):
     #multiply mask by maps here
-    if args.map2 == "":
-        args.map2=args.map
-    utils.create_CTF_reprojectionCorrected_stack(args.i, args.map, args.map2, args.mask, args.o, saveOriginal=False)
+    utils.create_signal_subtraction_stack(args.star, args.i, args.i, args.mask, args.o, saveOriginal=False)
+
+
+
+
+
+emprove_randomize_halves = command.add_parser (
+    "randomize_halves", description="randomize_halves", help='randomize_halves'
+)
+emprove_randomize_halves.add_argument("--i", required=True, type=str, help="input star file")
+emprove_randomize_halves.add_argument("--o", required=True, type=str, help="output starfile")
+def randomize_halves(args):
+    #print ("randomize halves")
+    version=starHandler.infoStarFile(args.i)[2]
+    if version=="relion_v31":
+        stringBlock="particles"
+    else:
+        stringBlock="images"
+    outValues=starHandler.read_star_columns_from_sections(args.i, stringBlock, ["_rlnRandomSubset"])
+    #print (outValues)
+    for col in ["_rlnRandomSubset"]:
+        outValues[col] = np.random.choice([1, 2], size=len(outValues))
+    starHandler.update_star_columns_from_sections(args.i, args.o, stringBlock, outValues)
+    #print (outValues["_rlnRandomSubset"])
+
 
 
 
@@ -810,6 +839,8 @@ def main(command_line=None):
         equalize_images(args)
     elif args.command == "signal_subtraction_stack":
         signal_subtraction_stack(args)
+    elif args.command == "randomize_halves":
+        randomize_halves(args)
     elif args.command == "ctf_correct_stack":
         ctf_correct_stack(args)
     elif args.command == "scores_to_csv":
