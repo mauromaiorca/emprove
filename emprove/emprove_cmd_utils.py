@@ -792,22 +792,9 @@ emprove_randomize_halves = command.add_parser (
 )
 emprove_randomize_halves.add_argument("--i", required=True, type=str, help="input star file")
 emprove_randomize_halves.add_argument("--o", required=True, type=str, help="output starfile")
-def randomize_halves(args):
-    #print ("randomize halves")
-    version=starHandler.infoStarFile(args.i)[2]
-    if version=="relion_v31":
-        stringBlock="particles"
-    else:
-        stringBlock="images"
-    outValues=starHandler.read_star_columns_from_sections(args.i, stringBlock, ["_rlnRandomSubset"])
-    #print (outValues)
-    for col in ["_rlnRandomSubset"]:
-        outValues[col] = np.random.choice([1, 2], size=len(outValues))
-    starHandler.update_star_columns_from_sections(args.i, args.o, stringBlock, outValues)
-    #print (outValues["_rlnRandomSubset"])
-
-
-
+def randomize_halves_utils(args):
+    starHandler.randomize_halves(args.i, args.o)
+ 
 
 
 
@@ -840,7 +827,7 @@ def main(command_line=None):
     elif args.command == "signal_subtraction_stack":
         signal_subtraction_stack(args)
     elif args.command == "randomize_halves":
-        randomize_halves(args)
+        randomize_halves_utils(args)
     elif args.command == "ctf_correct_stack":
         ctf_correct_stack(args)
     elif args.command == "scores_to_csv":
