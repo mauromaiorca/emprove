@@ -718,7 +718,7 @@ void usage(  char ** argv ){
     std::cerr<<"              --extractFromSimilarParameters extractFromSimilarParametersTemplateFullFile.star ParametersToCompare=[angles,origin,defocus] outputImageTag=[_emprove_originalTag_rlnImageName]\n";
     std::cerr<<"                    (Useful for cryosparc's particle subtraction. It extract images in the starFileIn.star that has similar parameters from the template image, and put the filename of the template image.)\n";
 
-    std::cerr<<"              --updateParameters templateForUpdateStarFile.star parametersToUpdate=[class,angles,euler,psi,origin,ctf]\n";
+    std::cerr<<"              --updateParameters templateForUpdateStarFile.star parametersToUpdate=[class,angles,euler,psi,origin,ctf,subset]\n";
     std::cerr<<"              --backupImageNameTag  outputImageTag=[_emprove_originalTag_rlnImageName]\n";
 
 
@@ -2622,6 +2622,10 @@ _rlnMicrographName #14
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnClassNumber",starFileIn));
          listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnClassNumber",parameters.templateForUpdateStarFile));
        }
+       if ( inputParameters.find("subset")!=std::string::npos ){
+         listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnRandomSubset",starFileIn));
+         listTagIdxTemplate.push_back(getStarHeaderItemIdx("_rlnRandomSubset",parameters.templateForUpdateStarFile));
+       }       
 
        if ( inputParameters.find("psi")!=std::string::npos  ){
          listTagIdxInput.push_back(getStarHeaderItemIdx("_rlnAnglePsi",starFileIn));
