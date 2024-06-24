@@ -254,6 +254,29 @@ ensure_directory() {
     [ ! -d "$dir" ] && mkdir -p "$dir"
 }
 
+#script for reconstructing halfMaps using relion
+rec_subsets() {
+    local starFileIn=$1
+    local fileOut_basename=$2
+    [ -f "${fileOut_basename}_recH1.mrc" ] && rm "${fileOut_basename}_recH1.mrc"; [ -f "${fileOut_basename}_recH2.mrc" ] && rm "${fileOut_basename}_recH2.mrc"
+    local all_done=false
+    while [ "$all_done" = false ]; do
+        all_done=true
+        for subset in 1 2; do
+            local fileOut=${fileOut_basename}_recH${subset}.mrc
+            if [ -f $fileOut ]; then
+                echo "DOING NOTHING: Reconstructed file $fileOut exists"
+            else
+                all_done=false
+                echo "DOING Reconstruction for file $fileOut"
+                relion_reconstruct --i $starFileIn --o $fileOut --subset $subset --ctf &
+            fi
+        done
+        wait
+    done
+}
+
+#main iteration
 process_iteration() {
     local ite=$1
     local workingDir=$2
@@ -271,10 +294,33 @@ process_iteration() {
     DO_WORK_WITH_SIGNAL_SUBTRACTION=$signalSubtractionFlag  # or $False
     local fileWithNormalization=${workingDir}/${tag}/scored_selection_${ite}.star #for regular operations\n'''
 
+
     if data.get("singleMapReferenceFlag", "True")=="True":
         run_script_cmd += '    emprove scoreParticles --i $targetStar --map $singleReferenceFile  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
     else:
-        run_script_cmd += '    emprove scoreParticles --i $targetStar --map $targetMap1  --map2 $targetMap2  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
+        if data.get("bootstrap", "True")=="True":
+            run_script_cmd += '\n    #bootstrap, randomized particles\n'
+            overviewFile=os.path.join(data.get("session_name"),"overview.txt")
+            if not os.path.exists(overviewFile):
+                run_script_cmd += '    emprove_utils randomize_halves --i ${targetStar} --o ${workingDir}/target_particles_randomizedHalf.star\n'
+            else:
+                run_script_cmd += '    local particlesStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)\n'
+                run_script_cmd += '    emprove_utils randomize_halves --i ${particlesStar} --o ${workingDir}/target_particles_randomizedHalf.star\n'
+            run_script_cmd += '    rec_subsets ${workingDir}/target_particles_randomizedHalf.star ${workingDir}/target_particles_randomizedHalf\n'
+            run_script_cmd += '    emprove scoreParticles --i ${workingDir}/target_particles_randomizedHalf.star --map ${workingDir}/target_particles_randomizedHalf_recH1.mrc  --map2 ${workingDir}/target_particles_randomizedHalf_recH2.mrc  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
+            #run_script_cmd += '\n    #doing random bootstrap half maps\n'
+            #if os.path.exists(file_path):
+            #run_script_cmd += '    local particlesStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)\n'
+            #run_script_cmd += '    emprove_utils randomize_halves --i ${particlesStar} --o ${workingDir}/${tag}/selection_particles_randomizedHalf.star\n'
+            #run_script_cmd += '    rec_subsets ${workingDir}/${tag}/selection_particles_randomizedHalf.star ${workingDir}/${tag}/target_particles_randomizedHalf\n'
+            #run_script_cmd += '    emprove_utils randomize_halves --i $targetStar --o ${workingDir}/${tag}/tmp_randomizedHalf.star\n'
+            #run_script_cmd += '    emprove_app_starProcess --i ${workingDir}/${tag}/tmp_randomizedHalf.star --updateParameters ${workingDir}/${tag}/selection_particles_randomizedHalf.star subset --o ${workingDir}/${tag}/target_particles_randomizedHalf.star\n'
+            #run_script_cmd += '    targetStar=${workingDir}/${tag}/target_particles_randomizedHalf.star\n'
+            #run_script_cmd += '    targetMap1=${workingDir}/${tag}/target_particles_randomizedHalf_recH1.mrc\n'
+            #run_script_cmd += '    targetMap2=${workingDir}/${tag}/target_particles_randomizedHalf_recH2.mrc\n'
+        else:
+            run_script_cmd += '    emprove scoreParticles --i $targetStar --map $targetMap1  --map2 $targetMap2  --mask $targetMask --apix ${apix} --sigma ${sigma} --selectionName ${ite} --o ${fileWithNormalization} --mpi '+ data.get("mpi", 5) + ' --rank '+ data.get("numViews", 350) + '\n'
+    run_script_cmd += '    \n'
 
     run_script_cmd += '''    if [ $DO_WORK_WITH_SIGNAL_SUBTRACTION -eq $True ]; then
     	echo "Working with signal subtraction"
@@ -300,9 +346,22 @@ process_iteration() {
     previousLocresFile=${workingDir}/${tag}/bestRanked_locres_values.csv
 
     emprove_optimizer generate_overview --directory ${workingDir}
-    targetMap1=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map1)
-    targetMap2=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map2)
 '''
+
+    #if data.get("bootstrap", "True")=="True":
+    #    run_script_cmd += '\n    #doing random bootstrap half maps\n'
+    #    run_script_cmd += '    local particlesStar=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --particles)\n'
+    #    run_script_cmd += '    emprove_utils randomize_halves --i ${particlesStar} --o ${workingDir}/${tag}/selection_particles_randomizedHalf.star\n'
+    #    run_script_cmd += '    rec_subsets ${workingDir}/${tag}/selection_particles_randomizedHalf.star ${workingDir}/${tag}/target_particles_randomizedHalf\n'
+    #    run_script_cmd += '    emprove_utils randomize_halves --i $targetStar --o ${workingDir}/${tag}/tmp_randomizedHalf.star\n'
+    #    run_script_cmd += '    emprove_app_starProcess --i ${workingDir}/${tag}/tmp_randomizedHalf.star --updateParameters ${workingDir}/${tag}/selection_particles_randomizedHalf.star subset --o ${workingDir}/${tag}/target_particles_randomizedHalf.star\n'
+    #    run_script_cmd += '    targetStar=${workingDir}/${tag}/target_particles_randomizedHalf.star\n'
+    #    run_script_cmd += '    targetMap1=${workingDir}/${tag}/target_particles_randomizedHalf_recH1.mrc\n'
+    #    run_script_cmd += '    targetMap2=${workingDir}/${tag}/target_particles_randomizedHalf_recH2.mrc\n'
+    #else:
+    run_script_cmd += '    targetMap1=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map1)\n'
+    run_script_cmd += '    targetMap2=$(emprove_optimizer getTarget --overviewFile ${workingDir}/overview.txt --map2)\n'
+
 
     if data.get("singleMapReferenceFlag", "True")=="True":
         run_script_cmd += "    local singleReferenceFileBasename=${workingDir}/${tag}/norm_${tag}\n"
@@ -361,6 +420,17 @@ emprove_new_select_session.add_argument("--name", required=True, type=str, help=
 emprove_new_select_session.add_argument("--particles", required=True, type=str, help="star file with list of particles")
 emprove_new_select_session.add_argument("--map", required=True, type=str, help="first reference, first half map or full map")
 emprove_new_select_session.add_argument("--map2", required=False, type=str, help="second half map")
+
+
+emprove_new_select_session.add_argument("--bootstrap", action='store_true', help="randomize halfmaps for each iterations.")
+emprove_new_select_session.add_argument("--resolutionBestTarget", required=False, 
+    type=lambda v: v.lower() if v.lower() in ['meanresolution', 'highresolution', 'lowresolution'] else argparse.ArgumentTypeError(f"Invalid choice: {v}. Choose from ['meanResolution', 'highResolution', 'lowResolution']"), 
+    default='meanResolution',
+    help="Choose the best resolution target from: [meanResolution, highResolution, lowResolution]. Case insensitive."
+)
+
+
+
 emprove_new_select_session.add_argument("--postprocessing", required=False, default="avg", type=str, help="choose between: [ avg | autobfac ]")
 emprove_new_select_session.add_argument("--mask", required=True, type=str, help="mask for the region")
 emprove_new_select_session.add_argument("--angpix", required=False, type=str, help="pixel spacing in Ansgtrom, if not given it is inferred from the map")
@@ -373,6 +443,9 @@ emprove_new_select_session.add_argument("--samplingDensityFactor", required=Fals
 emprove_new_select_session.add_argument("--extraSamples_num", required=False, type=int, default=1,  help="number of extra reconstructions samples for more correct optimization (to reduce the local minima trap)")
 emprove_new_select_session.add_argument("--extraSamples_randomness", required=False, type=float, default=0.1,  help="number of extra reconstructions samples randomness, between 0 and 1: default 0.1, max=1")
 emprove_new_select_session.add_argument("--extraSamples_audacity", required=False, type=float, default=0.5,  help="audacity of extra reconstructions samples, between 0 and 1: default 0.5, very audacious=1")
+
+
+
 
 
 emprove_new_select_session.add_argument("--randomSeed", action='store_true', help="Same random sequence at each call. Get non-random initialization. Recommended to use only it only for debug or for fully reproducible reconstruction sampling (i.e. it is not completely random, ).")
@@ -430,10 +503,13 @@ def new_select_session(args):
     else:
         particleSubtractionFlag='False'
 
+    if (args.bootstrap):
+        bootstrap='True'
+    else:
+        bootstrap='False'
+
     if args.postprocessing not in ["avg", "autobfac"]:
         args.postprocessing = "avg"
-
-
 
 
     # Create the settings file if it doesn't exist
@@ -454,6 +530,8 @@ def new_select_session(args):
             file.write("\n# maps. If only one map it is given, emprove uses only this map, but this will break the assumption of independency for the two half maps, angular re-assignment might be required.\n")
             file.write(f'map = "{args.map}"\n')
             file.write(f'map2 = "{args.map2}"\n')
+            file.write(f'bootstrap = "{bootstrap}"\n')
+            file.write(f'resolutionBestTarget = "{args.resolutionBestTarget}"\n')
             file.write(f'fullMap = "{fullMapReference}"\n')
             file.write(f'postprocess = "{args.postprocessing}"\n')
             file.write(f'singleMapReferenceFlag= "{singleMapReferenceFlag}"\n')
