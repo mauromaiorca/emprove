@@ -31,6 +31,7 @@ command = emprove_parser.add_subparsers(dest="command")
 #################################
 ## predict_min_particles
 def predict_min_particles(file_path="", outputImageFile="", outputSplineFile="", showPlot=True, predicted_particles=None, ax=None):
+    showPlot=True
     sns.set_style("whitegrid")  # Set Seaborn's whitegrid style
     if ax is None:
         fig, ax = plt.subplots()
@@ -46,7 +47,8 @@ def predict_min_particles(file_path="", outputImageFile="", outputSplineFile="",
     if file_path:
         df = pd.read_csv(file_path)
         x = df['numParticles'].values
-        y = df['mean'].values
+        #y = df['mean'].values
+        y = df['max'].values
 
         # Detect outliers using IQR
         Q1 = np.percentile(y, 10)
