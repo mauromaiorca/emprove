@@ -6,15 +6,24 @@ J44_006_particles.cs, which contains the locations of the particles in the cryoS
 
 (1) to convert the "particles.cs" file to star file. You can do it by using the command csparc2star.py from pyem. The syntax is something like:
 csparc2star.py J44_006_particles.cs J44_006_particles.star
+
 (2) point the star file to the mrcs filename instead of the mrc.You can do it by opening the star file with any decent text editor (gedit on linux works fine) and add an s to all the mrc filenames in the _rlnImageName parameters (something like "edit -> replace all" in the text editor). Or using regular expressions just do:
 
 ```
 sed -i 's/_particles\.mrc /_particles.mrcs /g' J44_006_particles.star
 ```
-
+and get a link for all the files to point to mrcs:
+```
+for filename in J41/extract/*.mrc; do
+	 base=$(basename "$filename")
+	 newname="${base%.mrc}.mrcs"
+	 ln -s "$base" "J41/extract/$newname"
+done
+```
 (3) create the stack with relion using the command:
 relion_stack_create --i J44_006_particles.star --o full_stack --one_by_one
 
+and you have your stack, with header full_stack.star and the images from the stack will be full_stack.mrcs
 
 
 
